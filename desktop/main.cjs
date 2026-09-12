@@ -1,5 +1,5 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron')
-const { spawn } = require('node:child_process')
+const { spawn, spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 const { installWorkflow } = require('./workflow.cjs')
@@ -8,6 +8,7 @@ let window
 let harness
 let harnessOrigin
 let quitting = false
+let cachedRuntimePath
 
 const READY = /(?:^|\n)dsh web:\s+(http:\/\/127\.0\.0\.1:\d+(?:\/[^\s]*)?)(?:\s|$)/
 
@@ -36,9 +37,43 @@ function dshEntry() {
   return entry
 }
 
+function runtimePath() {
+  if (cachedRuntimePath) return cachedRuntimePath
+
+  const pathValues = []
+  if (process.platform === 'darwin') {
+    const preferredShell = process.env.SHELL && fs.existsSync(process.env.SHELL) ? process.env.SHELL : '/bin/zsh'
+    try {
+      const shellEnv = { ...process.env }
+      delete shellEnv.ELECTRON_RUN_AS_NODE
+      const result = spawnSync(preferredShell, ['-ilc', `printf '\n__PAVAN_PATH__%s\n' "$PATH"`], {
+        encoding: 'utf8',
+        timeout: 5000,
+        env: shellEnv,
+      })
+      const matches = String(result.stdout || '').match(/__PAVAN_PATH__([^\r\n]*)/g) || []
+      const last = matches.at(-1)
+      if (last) pathValues.push(last.replace('__PAVAN_PATH__', ''))
+    } catch {}
+  }
+
+  pathValues.push(process.env.PATH || '')
+  if (process.platform === 'darwin') pathValues.push('/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin')
+  pathValues.push('/usr/bin:/bin:/usr/sbin:/sbin')
+
+  const seen = new Set()
+  cachedRuntimePath = pathValues
+    .flatMap(value => String(value).split(path.delimiter))
+    .map(value => value.trim())
+    .filter(value => value && !seen.has(value) && seen.add(value))
+    .join(path.delimiter)
+  return cachedRuntimePath
+}
+
 function dshEnv() {
   return {
     ...process.env,
+    PATH: runtimePath(),
     ELECTRON_RUN_AS_NODE: '1',
     DSH_HOME: dshHome(),
     DSH_TELEMETRY_DISABLED: process.env.DSH_TELEMETRY_DISABLED ?? '1',

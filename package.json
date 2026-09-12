@@ -1,6 +1,6 @@
 {
   "name": "pavans-workflow-dsh",
-  "version": "0.3.0-alpha.1",
+  "version": "0.3.0-alpha.2",
   "private": true,
   "description": "Pavan Workflow desktop distribution powered by DeepSeek Harness",
   "type": "module",
