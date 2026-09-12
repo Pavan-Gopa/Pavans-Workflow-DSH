@@ -58,9 +58,6 @@ jobs:
       - name: Build ad-hoc signed DMG and ZIP
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          # electron-builder normally skips all signing on PR builds. This app
-          # uses only the public ad-hoc identity, so there are no signing
-          # credentials or secrets to expose by allowing PR signing here.
           CSC_FOR_PULL_REQUEST: 'true'
         run: npm run desktop:dist:mac -- ${{ matrix.arch }}
       - name: Smoke-test packaged app outside the repository
@@ -70,7 +67,6 @@ jobs:
 
           SOURCE_APP="$(find dist -type d -name 'Pavan Workflow.app' -print -quit)"
           test -n "$SOURCE_APP"
-
           ISOLATED="$(mktemp -d)"
           APP="$ISOLATED/Pavan Workflow.app"
           WORKSPACE="$ISOLATED/workspace"
@@ -83,24 +79,22 @@ jobs:
           }
           trap cleanup EXIT
 
-          # Copy the finished app completely outside the checkout. This prevents
-          # Node from accidentally resolving a missing packaged dependency from
-          # the build machine's repository-level node_modules.
           ditto "$SOURCE_APP" "$APP"
           mkdir -p "$WORKSPACE"
 
           BUNDLE="$APP/Contents/Resources/app"
           NODE="$APP/Contents/Resources/runtime/node"
-          DSH="$BUNDLE/node_modules/@deepseek-ai/dsh/lib/bin.js"
-          GROUP="$BUNDLE/node_modules/@deepseek-ai/cordis-plugin-group/package.json"
-          PNPM="$BUNDLE/node_modules/pnpm/bin/pnpm.cjs"
+          DSH_ROOT="$APP/Contents/Resources/dsh"
+          DSH="$DSH_ROOT/node_modules/@deepseek-ai/dsh/lib/bin.js"
+          PNPM="$DSH_ROOT/node_modules/pnpm/bin/pnpm.cjs"
 
           test -x "$NODE"
           test -f "$DSH"
-          test -f "$GROUP"
           test -f "$PNPM"
+          test -f "$DSH_ROOT/pavan-runtime.json"
           test -f "$BUNDLE/.dsh/skills/pavan-workflow/SKILL.md"
           find "$APP/Contents/Resources" -name '*.icns' -print -quit | grep -q .
+          "$NODE" "$BUNDLE/desktop/prepare-dsh-runtime.cjs" --verify "$DSH_ROOT"
 
           codesign --verify --deep --strict "$APP"
           codesign -dv --verbose=2 "$APP" 2>&1 | grep -q 'Signature=adhoc'
@@ -108,9 +102,6 @@ jobs:
           "$NODE" "$DSH" --version
           test "$("$NODE" "$PNPM" --version)" = "11.7.0"
 
-          # Exercise the exact project-folder installation code from the
-          # packaged application, then prove that Harness starts with that
-          # project as its working directory.
           "$NODE" -e \
             'require(process.argv[1]).installWorkflow(process.argv[2], process.argv[3])' \
             "$BUNDLE/desktop/workflow.cjs" "$BUNDLE" "$WORKSPACE"
@@ -125,44 +116,27 @@ jobs:
           popd >/dev/null
 
           ready=0
-          for _ in $(seq 1 90); do
+          for _ in $(seq 1 120); do
             if grep -q 'dsh web:' "$LOG"; then ready=1; break; fi
             if ! kill -0 "$PID" 2>/dev/null; then break; fi
             sleep 1
           done
-          if [ "$ready" -ne 1 ]; then
-            cat "$LOG"
-            exit 1
-          fi
+          if [ "$ready" -ne 1 ]; then cat "$LOG"; exit 1; fi
 
-          # A process cwd is not a DSH Workspace registration. Authenticate the
-          # same way the browser does, then adopt the chosen project through the
-          # official workspace/create Remote endpoint and require success.
           READY_URL="$(grep -Eo 'http://127\.0\.0\.1:[0-9]+/\?token=[A-Za-z0-9_-]+' "$LOG" | tail -1)"
           test -n "$READY_URL"
           ORIGIN="$("$NODE" -e 'process.stdout.write(new URL(process.argv[1]).origin)' "$READY_URL")"
           curl --fail --silent --show-error --location --cookie-jar "$COOKIE" --cookie "$COOKIE" "$READY_URL" --output /dev/null
           BODY="$("$NODE" -e '
             const { randomUUID } = require("node:crypto");
-            process.stdout.write(JSON.stringify({
-              type: "client-request",
-              rpcId: "pavan-desktop-smoke-" + randomUUID(),
-              method: "workspace/create",
-              payload: { args: { request: { path: process.argv[1] } } },
-            }));
+            process.stdout.write(JSON.stringify({type:"client-request",rpcId:"pavan-desktop-smoke-"+randomUUID(),method:"workspace/create",payload:{args:{request:{path:process.argv[1]}}}}));
           ' "$WORKSPACE")"
           RESPONSE="$(curl --fail --silent --show-error --cookie-jar "$COOKIE" --cookie "$COOKIE" -H 'content-type: application/json' --data "$BODY" "$ORIGIN/api/workspace/create")"
           "$NODE" -e '
-            const payload = JSON.parse(process.argv[1]);
-            if (payload?.result?.ok !== true) {
-              console.error("workspace/create failed:", JSON.stringify(payload));
-              process.exit(1);
-            }
-            const workspace = payload.result.value?.workspace;
-            if (!workspace || typeof workspace.path !== "string") {
-              console.error("workspace/create returned an unexpected payload:", JSON.stringify(payload));
-              process.exit(1);
-            }
+            const payload=JSON.parse(process.argv[1]);
+            if(payload?.result?.ok!==true) { console.error(JSON.stringify(payload)); process.exit(1); }
+            const workspace=payload.result.value?.workspace;
+            if(!workspace||typeof workspace.path!=="string") { console.error(JSON.stringify(payload)); process.exit(1); }
             console.log(`registered workspace: ${workspace.path}`);
           ' "$RESPONSE"
 
