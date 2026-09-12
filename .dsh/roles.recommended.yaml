@@ -1,0 +1,46 @@
+version: 1
+
+# Recommended first live-routing preset for current DeepSeek Harness.
+# These exact route/model ids are present in the current upstream DSH docs/E2E:
+#   deepseek-official / deepseek-v4-pro
+#   anthropic         / claude-opus-4-8
+#   openai            / gpt-5.5
+#
+# You must configure credentials for all three providers in DSH Web and authorize
+# every primary/backup route under Settings -> Plugins -> Subagent model selection.
+# Start a NEW top-level Session after changing the allowlist.
+
+policy:
+  automatic_backup: false
+  require_human_backup_authorization: true
+  require_route_verification: true
+  one_specialist_at_a_time: true
+
+roles:
+  coder:
+    primary: { provider: "deepseek-official", model: "deepseek-v4-pro" }
+    backup:  { provider: "anthropic", model: "claude-opus-4-8" }
+
+  reviewer:
+    primary: { provider: "anthropic", model: "claude-opus-4-8" }
+    backup:  { provider: "openai", model: "gpt-5.5" }
+
+  tester:
+    primary: { provider: "openai", model: "gpt-5.5" }
+    backup:  { provider: "deepseek-official", model: "deepseek-v4-pro" }
+
+  architect:
+    primary: { provider: "anthropic", model: "claude-opus-4-8" }
+    backup:  { provider: "deepseek-official", model: "deepseek-v4-pro" }
+
+  security:
+    primary: { provider: "openai", model: "gpt-5.5" }
+    backup:  { provider: "anthropic", model: "claude-opus-4-8" }
+
+  design_advisor:
+    primary: { provider: "anthropic", model: "claude-opus-4-8" }
+    backup:  { provider: "openai", model: "gpt-5.5" }
+
+  designer:
+    primary: { provider: "openai", model: "gpt-5.5" }
+    backup:  { provider: "anthropic", model: "claude-opus-4-8" }
