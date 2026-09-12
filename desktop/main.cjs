@@ -236,6 +236,32 @@ function secureHarnessNavigation(url) {
   })
 }
 
+async function registerWorkspace(workspace) {
+  // The DSH workspace registry is independent from the process cwd. Register
+  // the directory through the supported Remote endpoint after the first page
+  // load establishes Harness' local auth cookie.
+  const encodedPath = JSON.stringify(workspace)
+  const result = await window.webContents.executeJavaScript(`
+    (async () => {
+      const response = await fetch('/api/workspace/create', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ args: { request: { path: ${encodedPath} } } }),
+      })
+      const text = await response.text()
+      return { ok: response.ok, status: response.status, text }
+    })()
+  `, true)
+
+  if (!result?.ok) throw new Error(`workspace/create returned HTTP ${result?.status ?? 'unknown'}: ${result?.text ?? ''}`)
+  let payload
+  try { payload = JSON.parse(result.text) } catch { throw new Error(`workspace/create returned invalid JSON: ${result.text}`) }
+  if (payload?.result?.ok === false) {
+    throw new Error(`workspace/create failed: ${payload.result.error?.message ?? JSON.stringify(payload.result.error)}`)
+  }
+  return payload?.result?.value ?? payload
+}
+
 function createWindow() {
   window = new BrowserWindow({
     width: 1280,
@@ -281,9 +307,19 @@ ipcMain.handle('desktop:launch', async (_event, options) => {
     )
   }
 
-  emitStatus('ready', 'Harness is ready. Opening the workspace…')
+  emitStatus('ready', 'Harness is ready. Registering the selected workspace…')
   secureHarnessNavigation(url)
   await window.loadURL(url)
+  try {
+    await registerWorkspace(workspace)
+  } catch (error) {
+    await dialog.showMessageBox(window, {
+      type: 'warning',
+      title: 'Workspace registration failed',
+      message: 'Harness started, but the selected folder could not be added to the Workspace list automatically.',
+      detail: String(error?.message ?? error),
+    })
+  }
   return { workspace, roles: installed.roles, url }
 })
 
