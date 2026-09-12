@@ -9,6 +9,7 @@ on:
       - 'AI_Workflow_Kit/**'
       - 'package.json'
       - '.github/workflows/desktop-macos.yml'
+      - '.github/workflows/desktop-release.yml'
   workflow_dispatch:
 
 concurrency:
@@ -59,7 +60,7 @@ jobs:
       - name: Install upstream Harness workspace
         working-directory: upstream-deepseek-harness
         run: pnpm install --frozen-lockfile
-      - name: Adapt upstream runtime signing for ad-hoc alpha
+      - name: Adapt upstream runtime preparation for ad-hoc alpha
         shell: bash
         run: |
           set -euo pipefail
@@ -68,11 +69,25 @@ jobs:
           const fs = require('node:fs')
           const file = process.argv[2]
           let body = fs.readFileSync(file, 'utf8')
-          const before = "if (process.platform === 'darwin') {"
-          const after = "if (false && process.platform === 'darwin') {"
-          if (!body.includes(before)) throw new Error('Upstream prepare-dsh signing gate changed; refusing an unreviewed patch')
-          body = body.replace(before, after)
+
+          const signingBefore = "if (process.platform === 'darwin') {\n  const machoFiles = ["
+          const signingAfter = "if (false && process.platform === 'darwin') {\n  const machoFiles = ["
+          const signingMatches = body.split(signingBefore).length - 1
+          if (signingMatches !== 1) {
+            throw new Error(`Expected exactly one upstream macOS signing block, found ${signingMatches}`)
+          }
+          body = body.replace(signingBefore, signingAfter)
+
+          const frozenBefore = "  '--frozen-lockfile',"
+          const frozenAfter = "  '--no-frozen-lockfile',"
+          const frozenMatches = body.split(frozenBefore).length - 1
+          if (frozenMatches !== 1) {
+            throw new Error(`Expected exactly one generated-runtime frozen lockfile flag, found ${frozenMatches}`)
+          }
+          body = body.replace(frozenBefore, frozenAfter)
+
           fs.writeFileSync(file, body)
+          console.log('Patched upstream alpha runtime preparation: ad-hoc signing + generated lockfile refresh.')
           NODE
       - name: Prepare complete upstream Desktop runtime closure
         working-directory: upstream-deepseek-harness
