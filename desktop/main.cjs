@@ -239,14 +239,21 @@ function secureHarnessNavigation(url) {
 async function registerWorkspace(workspace) {
   // The DSH workspace registry is independent from the process cwd. Register
   // the directory through the supported Remote endpoint after the first page
-  // load establishes Harness' local auth cookie.
+  // load establishes Harness' local auth cookie. The HTTP carrier requires the
+  // normal Typert client-request envelope, not a raw { args } object.
   const encodedPath = JSON.stringify(workspace)
   const result = await window.webContents.executeJavaScript(`
     (async () => {
-      const response = await fetch('/api/workspace/create', {
+      const method = 'workspace/create'
+      const response = await fetch('/api/' + method, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ args: { request: { path: ${encodedPath} } } }),
+        body: JSON.stringify({
+          type: 'client-request',
+          rpcId: 'pavan-workspace-' + crypto.randomUUID(),
+          method,
+          payload: { args: { request: { path: ${encodedPath} } } },
+        }),
       })
       const text = await response.text()
       return { ok: response.ok, status: response.status, text }
@@ -254,12 +261,21 @@ async function registerWorkspace(workspace) {
   `, true)
 
   if (!result?.ok) throw new Error(`workspace/create returned HTTP ${result?.status ?? 'unknown'}: ${result?.text ?? ''}`)
-  let payload
-  try { payload = JSON.parse(result.text) } catch { throw new Error(`workspace/create returned invalid JSON: ${result.text}`) }
-  if (payload?.result?.ok === false) {
-    throw new Error(`workspace/create failed: ${payload.result.error?.message ?? JSON.stringify(payload.result.error)}`)
+  let envelope
+  try { envelope = JSON.parse(result.text) } catch { throw new Error(`workspace/create returned invalid JSON: ${result.text}`) }
+  if (envelope?.result?.ok !== true) {
+    throw new Error(`workspace/create failed: ${envelope?.result?.error?.message ?? JSON.stringify(envelope)}`)
   }
-  return payload?.result?.value ?? payload
+  const registered = envelope.result.value?.workspace
+  if (!registered || typeof registered.path !== 'string') {
+    throw new Error(`workspace/create returned no Workspace projection: ${JSON.stringify(envelope)}`)
+  }
+  const requestedPath = fs.realpathSync(workspace)
+  const registeredPath = fs.realpathSync(registered.path)
+  if (registeredPath !== requestedPath) {
+    throw new Error(`Harness registered a different Workspace path: ${registered.path}`)
+  }
+  return envelope.result.value
 }
 
 function createWindow() {
