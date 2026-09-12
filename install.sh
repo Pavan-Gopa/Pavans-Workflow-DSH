@@ -95,19 +95,27 @@ fi
 mkdir -p "$TARGET/AI_Workflow_Kit/reports"
 
 if [[ "$SKIP_PLUGINS" -eq 0 ]]; then
-  command -v dsh >/dev/null || { echo "ERROR: dsh is not on PATH. Install DeepSeek Harness or rerun with --skip-plugins." >&2; exit 1; }
+  if command -v dsh >/dev/null; then
+    DSH_CMD=(dsh)
+  elif command -v npx >/dev/null; then
+    DSH_CMD=(npx --yes @deepseek-ai/dsh)
+  else
+    echo "ERROR: neither 'dsh' nor 'npx' is available. Install DeepSeek Harness/Node.js or rerun with --skip-plugins." >&2
+    exit 1
+  fi
+
   echo "Installing Codegraph into DSH profile '$PROFILE'..."
-  dsh plugin --profile "$PROFILE" add dsh-plugin-codegraph
+  "${DSH_CMD[@]}" plugin --profile "$PROFILE" add dsh-plugin-codegraph
   if [[ "$SKIP_QUOTA" -eq 0 ]]; then
     echo "Installing dsh-quota v0.8.0 into DSH profile '$PROFILE'..."
-    dsh plugin --profile "$PROFILE" add "https://github.com/Lottle7/dsh-quota/releases/download/v0.8.0/dsh-quota.tgz"
+    "${DSH_CMD[@]}" plugin --profile "$PROFILE" add "https://github.com/Lottle7/dsh-quota/releases/download/v0.8.0/dsh-quota.tgz"
   fi
-  echo "Plugin changes complete. Restart 'dsh web'."
+  echo "Plugin changes complete. Restart DSH Web."
 fi
 
 node "$SOURCE_DIR/scripts/doctor.mjs" --project "$TARGET" || {
   echo
-  echo "Doctor found expected setup blockers. Most commonly .dsh/roles.yaml still contains REPLACE_ME."
+  echo "Doctor found expected setup blockers. Most commonly .dsh/roles.yaml still contains REPLACE_ME or provider setup is incomplete."
   echo "Configure exact provider/model routes, authorize them in DSH Web, then rerun:"
   echo "  node '$SOURCE_DIR/scripts/doctor.mjs' --project '$TARGET'"
   exit 0
