@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Pavan Workflow whale icon">
+  <defs>
+    <linearGradient id="body" x1="0.18" y1="0.08" x2="0.88" y2="0.92">
+      <stop offset="0" stop-color="#62e6ff"/>
+      <stop offset="0.28" stop-color="#168cff"/>
+      <stop offset="0.68" stop-color="#1254d8"/>
+      <stop offset="1" stop-color="#0a2f87"/>
+    </linearGradient>
+    <linearGradient id="tail" x1="0.2" y1="0.1" x2="0.8" y2="0.9">
+      <stop offset="0" stop-color="#3fd6ff"/>
+      <stop offset="0.55" stop-color="#176de8"/>
+      <stop offset="1" stop-color="#0a3aa2"/>
+    </linearGradient>
+    <linearGradient id="belly" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0" stop-color="#f8fdff"/>
+      <stop offset="1" stop-color="#a9dfff"/>
+    </linearGradient>
+    <linearGradient id="water" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#baf7ff"/>
+      <stop offset="1" stop-color="#27b7ff"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="26" stdDeviation="24" flood-color="#00174f" flood-opacity="0.34"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <path fill="url(#tail)" d="M302 481C235 449 169 375 150 286c76 10 142 53 184 124 9-78 58-146 134-186 14 91-8 174-73 234-24 22-52 39-83 51z"/>
+    <path fill="url(#body)" d="M217 573c20-125 133-218 287-229 164-12 331 63 380 186 40 100-19 210-142 266-126 58-301 55-414-7-82-45-126-121-111-216z"/>
+    <path fill="url(#belly)" d="M478 675c90-13 142-65 199-96 75-40 146-42 203-12-8 99-77 183-180 226-109 45-248 47-353 5 34-46 74-88 131-123z" opacity="0.97"/>
+    <path fill="none" stroke="#73bff2" stroke-width="11" stroke-linecap="round" d="M532 707c73-20 119-65 164-89M559 746c73-22 118-61 157-84M598 775c61-22 100-54 134-75" opacity="0.58"/>
+    <path fill="url(#tail)" d="M393 708c42-31 92-45 131-32-13 63-70 122-140 147-27 10-52-15-43-42 8-25 24-50 52-73z"/>
+    <ellipse cx="728" cy="526" rx="27" ry="32" fill="#07265e"/>
+    <ellipse cx="738" cy="516" rx="8" ry="10" fill="#fff"/>
+    <path fill="none" stroke="#082e7c" stroke-width="11" stroke-linecap="round" d="M760 628c42 9 81 3 118-17" opacity="0.82"/>
+  </g>
+
+  <g fill="url(#water)">
+    <path d="M689 310c-12-40 10-84 47-111 22 40 12 83-17 117-13 15-24 13-30-6z"/>
+    <path d="M750 328c12-45 51-73 94-78-4 44-34 79-78 92-16 5-21 1-16-14z"/>
+    <path d="M639 330c-30-34-32-78-12-116 36 22 54 63 46 104-4 19-21 25-34 12z"/>
+  </g>
+</svg>
