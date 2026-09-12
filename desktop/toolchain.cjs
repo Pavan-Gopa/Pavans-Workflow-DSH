@@ -18,9 +18,9 @@ function prepareBundledToolchain({ directory, execPath, pnpmEntry, platform = pr
   fs.mkdirSync(binDir, { recursive: true })
 
   if (platform === 'win32') {
-    fs.writeFileSync(path.join(binDir, 'node.cmd'), `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${execPath}" %*\r\n`)
+    fs.writeFileSync(path.join(binDir, 'node.cmd'), `@echo off\r\n"${execPath}" %*\r\n`)
     for (const name of ['pnpm', 'pnpx']) {
-      fs.writeFileSync(path.join(binDir, `${name}.cmd`), `@echo off\r\nset ELECTRON_RUN_AS_NODE=1\r\n"${execPath}" "${pnpmEntry}" ${name === 'pnpx' ? 'dlx ' : ''}%*\r\n`)
+      fs.writeFileSync(path.join(binDir, `${name}.cmd`), `@echo off\r\n"${execPath}" "${pnpmEntry}" ${name === 'pnpx' ? 'dlx ' : ''}%*\r\n`)
     }
     return { binDir }
   }
@@ -31,7 +31,7 @@ function prepareBundledToolchain({ directory, execPath, pnpmEntry, platform = pr
 
   const writePnpmShim = (name, extra = '') => {
     const target = path.join(binDir, name)
-    const body = `#!/bin/sh\nexport ELECTRON_RUN_AS_NODE=1\nexec ${shellQuote(execPath)} ${shellQuote(pnpmEntry)} ${extra}"$@"\n`
+    const body = `#!/bin/sh\nexec ${shellQuote(execPath)} ${shellQuote(pnpmEntry)} ${extra}"$@"\n`
     fs.writeFileSync(target, body, { mode: 0o755 })
     fs.chmodSync(target, 0o755)
   }
