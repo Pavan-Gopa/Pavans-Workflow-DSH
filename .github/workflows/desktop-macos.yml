@@ -21,7 +21,7 @@ permissions:
 
 env:
   DSH_UPSTREAM_REF: c291e7961a515f6d7af9304e7fd1d257929aef26
-  DSH_RUNTIME_PNPM_VERSION: 10.27.0
+  DSH_RUNTIME_PNPM_VERSION: 11.7.0
 
 jobs:
   build:
@@ -71,19 +71,19 @@ jobs:
           const file = process.argv[2]
           let body = fs.readFileSync(file, 'utf8')
 
-          const signingBefore = "if (process.platform === 'darwin') {\n  const machoFiles = ["
-          const signingAfter = "if (false && process.platform === 'darwin') {\n  const machoFiles = ["
+          const signingBefore = "if (process.platform === 'darwin') {\n      await signMacOSRuntime(DSH_OUTPUT_ROOT, resolveDesktopAppId(process.env), resolveMacOSSigningEnvironment(process.env))\n    }"
+          const signingAfter = "if (false && process.platform === 'darwin') {\n      await signMacOSRuntime(DSH_OUTPUT_ROOT, resolveDesktopAppId(process.env), resolveMacOSSigningEnvironment(process.env))\n    }"
           const signingMatches = body.split(signingBefore).length - 1
           if (signingMatches !== 1) {
             throw new Error(`Expected exactly one upstream macOS signing block, found ${signingMatches}`)
           }
           body = body.replace(signingBefore, signingAfter)
 
-          const frozenBefore = "  '--frozen-lockfile',"
-          const frozenAfter = "  '--no-frozen-lockfile',"
+          const frozenBefore = "await runPnpm(['install', '--prod', '--frozen-lockfile', '--trust-lockfile'])"
+          const frozenAfter = "await runPnpm(['install', '--prod', '--no-frozen-lockfile', '--trust-lockfile'])"
           const frozenMatches = body.split(frozenBefore).length - 1
           if (frozenMatches !== 1) {
-            throw new Error(`Expected exactly one generated-runtime frozen lockfile flag, found ${frozenMatches}`)
+            throw new Error(`Expected exactly one generated-runtime frozen install, found ${frozenMatches}`)
           }
           body = body.replace(frozenBefore, frozenAfter)
 
