@@ -15,6 +15,9 @@ concurrency:
   group: desktop-release-${{ github.ref }}
   cancel-in-progress: false
 
+env:
+  DSH_UPSTREAM_REF: c291e7961a515f6d7af9304e7fd1d257929aef26
+
 jobs:
   build:
     permissions:
@@ -26,19 +29,51 @@ jobs:
           - name: macOS Intel
             runner: macos-15-intel
             arch: --x64
+            dsh_target: mac-x64
             artifact: pavan-workflow-macos-x64
           - name: macOS Apple Silicon
             runner: macos-15
             arch: --arm64
+            dsh_target: mac-arm64
             artifact: pavan-workflow-macos-arm64
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Pavan Workflow
+        uses: actions/checkout@v4
+      - name: Checkout pinned DeepSeek Harness
+        uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: ${{ env.DSH_UPSTREAM_REF }}
+          path: upstream-deepseek-harness
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Install dependencies
+      - name: Enable pinned pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@11.7.0 --activate
+          pnpm --version
+      - name: Install upstream Harness workspace
+        working-directory: upstream-deepseek-harness
+        run: pnpm install --frozen-lockfile
+      - name: Prepare complete upstream Desktop runtime closure
+        working-directory: upstream-deepseek-harness
+        run: pnpm --filter @deepseek-ai/dsh-desktop run prepare:package -- ${{ matrix.dsh_target }}
+      - name: Stage official Harness runtime for Pavan Workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          ROOT="upstream-deepseek-harness/apps/desktop/.desktop-build/targets/${{ matrix.dsh_target }}"
+          test -x "$ROOT/runtime/node/node"
+          test -f "$ROOT/runtime/pnpm/bin/pnpm.mjs"
+          test -f "$ROOT/dsh/node_modules/@deepseek-ai/dsh/lib/bin.js"
+          rm -rf .desktop-runtime
+          mkdir -p .desktop-runtime
+          cp -R "$ROOT/dsh" .desktop-runtime/dsh
+          cp -R "$ROOT/runtime" .desktop-runtime/runtime
+      - name: Install Pavan Workflow desktop dependencies
         run: npm install
       - name: Test
         run: npm test
@@ -61,25 +96,25 @@ jobs:
           WORKSPACE="$TMP/workspace"
           mkdir -p "$WORKSPACE"
 
-          DSH="$APP/Contents/Resources/app/node_modules/@deepseek-ai/dsh/lib/bin.js"
-          PNPM="$APP/Contents/Resources/app/node_modules/pnpm/bin/pnpm.cjs"
-          EXE="$APP/Contents/MacOS/Pavan Workflow"
+          NODE="$APP/Contents/Resources/runtime/node/node"
+          DSH="$APP/Contents/Resources/dsh-runtime/node_modules/@deepseek-ai/dsh/lib/bin.js"
+          PNPM="$APP/Contents/Resources/runtime/pnpm/bin/pnpm.mjs"
+          test -x "$NODE"
           test -f "$DSH"
           test -f "$PNPM"
-          test -f "$APP/Contents/Resources/app/node_modules/@deepseek-ai/cordis-plugin-group/lib/index.js"
           test -f "$APP/Contents/Resources/app/.dsh/skills/pavan-workflow/SKILL.md"
           codesign --verify --deep --strict "$APP"
           codesign -dv --verbose=2 "$APP" 2>&1 | grep -q 'Signature=adhoc'
 
-          (cd "$WORKSPACE" && env -u NODE_PATH ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" --version)
-          test "$(cd "$WORKSPACE" && env -u NODE_PATH ELECTRON_RUN_AS_NODE=1 "$EXE" "$PNPM" --version)" = "11.7.0"
+          (cd "$WORKSPACE" && env -u NODE_PATH "$NODE" "$DSH" --version)
+          test "$(cd "$WORKSPACE" && env -u NODE_PATH "$NODE" "$PNPM" --version)" = "11.7.0"
 
           LOG="$TMP/harness.log"
-          (cd "$WORKSPACE" && env -u NODE_PATH DSH_HOME="$TMP/home" ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1) &
+          (cd "$WORKSPACE" && env -u NODE_PATH DSH_HOME="$TMP/home" DSH_TELEMETRY_DISABLED=1 "$NODE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1) &
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true; rm -rf "$TMP"' EXIT
           ready=0
-          for _ in $(seq 1 90); do
+          for _ in $(seq 1 120); do
             if grep -q 'dsh web:' "$LOG"; then ready=1; break; fi
             if ! kill -0 "$PID" 2>/dev/null; then break; fi
             sleep 1
@@ -132,5 +167,5 @@ jobs:
             --target "$TARGET_SHA" \
             --title "Pavan Workflow Desktop ${VERSION}" \
             --prerelease \
-            --notes "macOS desktop alpha. Download the DMG for Apple Silicon (arm64) or Intel (x64). This build is validated from an isolated packaged app so runtime dependencies cannot leak in from the CI checkout. The app is ad-hoc signed but not Developer ID signed/notarized, so macOS may require Open Anyway in System Settings -> Privacy & Security."
+            --notes "macOS desktop alpha. This build embeds the complete DeepSeek Harness Desktop runtime prepared by upstream's own package-closure pipeline, including its pinned Node.js and pnpm. Download the DMG for Apple Silicon (arm64) or Intel (x64). The packaged app is copied outside the CI checkout and must boot dsh web successfully before the release job can publish it. The app is ad-hoc signed but not Developer ID signed/notarized, so macOS may require Open Anyway in System Settings -> Privacy & Security."
           gh release upload "$TAG" release-assets/*
