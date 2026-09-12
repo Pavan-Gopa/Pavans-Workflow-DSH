@@ -11,6 +11,10 @@ on:
       - '.github/workflows/desktop-macos.yml'
   workflow_dispatch:
 
+concurrency:
+  group: desktop-macos-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -45,6 +49,36 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run desktop:dist:mac -- ${{ matrix.arch }}
+      - name: Smoke-test packaged Harness runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$(find dist -type d -name 'Pavan Workflow.app' -print -quit)"
+          test -n "$APP"
+          DSH="$APP/Contents/Resources/app/node_modules/@deepseek-ai/dsh/lib/bin.js"
+          EXE="$APP/Contents/MacOS/Pavan Workflow"
+          test -f "$DSH"
+          test -f "$APP/Contents/Resources/app/.dsh/skills/pavan-workflow/SKILL.md"
+          ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" --version
+
+          TMP="$(mktemp -d)"
+          LOG="$TMP/harness.log"
+          DSH_HOME="$TMP/home" ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true; rm -rf "$TMP"' EXIT
+          ready=0
+          for _ in $(seq 1 90); do
+            if grep -q 'dsh web:' "$LOG"; then ready=1; break; fi
+            if ! kill -0 "$PID" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat "$LOG"
+            exit 1
+          fi
+          kill "$PID" 2>/dev/null || true
+          wait "$PID" 2>/dev/null || true
+          cat "$LOG"
       - name: Upload desktop package
         uses: actions/upload-artifact@v4
         with:
