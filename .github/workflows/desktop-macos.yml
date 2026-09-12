@@ -139,15 +139,23 @@ jobs:
           test -n "$READY_URL"
           ORIGIN="$(node -e 'process.stdout.write(new URL(process.argv[1]).origin)' "$READY_URL")"
           curl --fail --silent --show-error --location --cookie-jar "$COOKIE" --cookie "$COOKIE" "$READY_URL" --output /dev/null
-          BODY="$(node -e 'process.stdout.write(JSON.stringify({args:{request:{path:process.argv[1]}}}))' "$WORKSPACE")"
+          BODY="$(node -e '
+            const { randomUUID } = require("node:crypto");
+            process.stdout.write(JSON.stringify({
+              type: "client-request",
+              rpcId: "pavan-desktop-smoke-" + randomUUID(),
+              method: "workspace/create",
+              payload: { args: { request: { path: process.argv[1] } } },
+            }));
+          ' "$WORKSPACE")"
           RESPONSE="$(curl --fail --silent --show-error --cookie-jar "$COOKIE" --cookie "$COOKIE" -H 'content-type: application/json' --data "$BODY" "$ORIGIN/api/workspace/create")"
           node -e '
             const payload = JSON.parse(process.argv[1]);
-            if (payload?.result?.ok === false) {
-              console.error(JSON.stringify(payload));
+            if (payload?.result?.ok !== true) {
+              console.error("workspace/create failed:", JSON.stringify(payload));
               process.exit(1);
             }
-            const workspace = payload?.result?.value?.workspace ?? payload?.workspace;
+            const workspace = payload.result.value?.workspace;
             if (!workspace || typeof workspace.path !== "string") {
               console.error("workspace/create returned an unexpected payload:", JSON.stringify(payload));
               process.exit(1);
