@@ -4,7 +4,7 @@ A Human-supervised, multi-model software-development workflow for DeepSeek Harne
 
 ## Download the desktop app
 
-The preferred distribution is **Pavan Workflow Desktop**. It bundles the DeepSeek Harness runtime, so normal users do **not** need Node.js, `npm`, `npx`, `git clone`, or a terminal just to launch the app.
+The preferred distribution is **Pavan Workflow Desktop**. It bundles DeepSeek Harness, a regular Node 24 runtime, and pnpm, so normal users do **not** need Node.js, `npm`, `npx`, `git clone`, or a terminal just to launch the app.
 
 Open this repository's **Releases** page and download the newest macOS build for your Mac. The next qualified build is `0.3.0-alpha.3`:
 
@@ -15,7 +15,7 @@ Then open the DMG, drag **Pavan Workflow** to Applications, and launch it. On fi
 
 1. choose the project folder you want to work on;
 2. Pavan Workflow installs/updates its managed project-local skills and helpers while preserving project state and an existing `.dsh/roles.yaml`;
-3. the bundled DeepSeek Harness starts locally inside the desktop app;
+3. the bundled DeepSeek Harness starts under the app's bundled regular Node runtime inside the desktop app;
 4. the chosen directory is registered through Harness' persistent Workspace API, not merely used as the process working directory;
 5. configure model providers in **Settings -> Models**;
 6. authorize child routes in **Settings -> Plugins -> Subagent model selection**;
@@ -27,27 +27,29 @@ Then open the DMG, drag **Pavan Workflow** to Applications, and launch it. On fi
 
 ```text
 Pavan Workflow.app
-  -> Electron desktop shell
+  -> Electron shell for the native application window
+  -> bundled regular Node 24 runtime for Harness, tools and plugins
   -> bundled @deepseek-ai/dsh runtime + required runtime peers
-  -> bundled pnpm + app-owned Node/pnpm shims
+  -> bundled pnpm + app-owned node/pnpm shims
   -> local DSH Web UI inside the native window
   -> Pavan Workflow project skills + state templates
   -> optional Codegraph + usage/quota plugin setup
 ```
 
-DeepSeek Harness remains the engine. The desktop shell owns startup, project selection, workflow installation/upgrades, Workspace registration, local runtime lifecycle, toolchain bootstrap, and the native application window.
+Electron is only the shell. The Harness process, pnpm, subprocess-facing Node shim, and coding runtime do not use Electron's patched Node mode. This mirrors the important runtime-isolation principle used by upstream DSH Desktop and avoids tying native coding tools to Electron's ABI/lifecycle.
 
 ### Desktop release qualification
 
 A desktop release is not accepted merely because source tests pass. GitHub Actions must, on **both Apple Silicon and Intel**:
 
-1. build the DMG/ZIP;
+1. build the DMG/ZIP and generate the macOS whale icon;
 2. copy the completed `.app` outside the repository checkout, so it cannot accidentally resolve dependencies from build-time `node_modules`;
-3. verify the packaged DSH runtime, required Cordis runtime peer, bundled pnpm, workflow skills, generated macOS icon, and code signature;
-4. invoke the workflow installer from the packaged app against a fresh temporary project;
-5. verify project-local roles, skills, marker, and canonical state are actually written;
-6. start the packaged Harness from that project and wait for its real ready signal;
-7. authenticate through the same browser-token exchange used by DSH and require `workspace/create` to register the selected project successfully.
+3. verify the packaged regular Node runtime, DSH runtime, required Cordis runtime peer, bundled pnpm, workflow skills, generated `.icns`, and code signature;
+4. run DSH and pnpm with the packaged regular Node runtime rather than Electron-as-Node;
+5. invoke the workflow installer from the packaged app against a fresh temporary project;
+6. verify project-local roles, skills, marker, and canonical state are actually written;
+7. start the packaged Harness from that project and wait for its real ready signal;
+8. authenticate through the same browser-token exchange used by DSH and require `workspace/create` to register the selected project successfully.
 
 This gate exists specifically to catch failures that only appear after the app is moved to `/Applications`.
 
@@ -182,7 +184,7 @@ GitHub Actions builds both architectures and tests the **isolated packaged appli
 
 ## Status
 
-Both this project and DeepSeek Harness are in developer preview. The desktop shell intentionally stays thin enough to follow upstream DSH, but a release is only published after isolated packaged-runtime qualification on both supported macOS architectures.
+Both this project and DeepSeek Harness are in developer preview. The desktop shell intentionally stays thin enough to follow upstream DSH, but a release is only published after isolated packaged-runtime qualification on both supported macOS architectures. A successful Desktop boot is still not considered proof of multi-model orchestration: the final workflow gate is a real Coder -> Main verify -> Reviewer -> Main verify -> Tester -> Main verify run with the user's configured provider routes.
 
 ## License
 
