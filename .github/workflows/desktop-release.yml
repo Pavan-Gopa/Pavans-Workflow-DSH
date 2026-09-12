@@ -48,26 +48,34 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run desktop:dist:mac -- ${{ matrix.arch }}
-      - name: Smoke-test packaged Harness runtime
+      - name: Smoke-test packaged Harness runtime in isolation
         shell: bash
         run: |
           set -euo pipefail
-          APP="$(find dist -type d -name 'Pavan Workflow.app' -print -quit)"
-          test -n "$APP"
+          BUILT_APP="$(find dist -type d -name 'Pavan Workflow.app' -print -quit)"
+          test -n "$BUILT_APP"
+
+          TMP="$(mktemp -d)"
+          APP="$TMP/Pavan Workflow.app"
+          cp -R "$BUILT_APP" "$APP"
+          WORKSPACE="$TMP/workspace"
+          mkdir -p "$WORKSPACE"
+
           DSH="$APP/Contents/Resources/app/node_modules/@deepseek-ai/dsh/lib/bin.js"
           PNPM="$APP/Contents/Resources/app/node_modules/pnpm/bin/pnpm.cjs"
           EXE="$APP/Contents/MacOS/Pavan Workflow"
           test -f "$DSH"
           test -f "$PNPM"
+          test -f "$APP/Contents/Resources/app/node_modules/@deepseek-ai/cordis-plugin-group/lib/index.js"
           test -f "$APP/Contents/Resources/app/.dsh/skills/pavan-workflow/SKILL.md"
           codesign --verify --deep --strict "$APP"
           codesign -dv --verbose=2 "$APP" 2>&1 | grep -q 'Signature=adhoc'
-          ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" --version
-          test "$(ELECTRON_RUN_AS_NODE=1 "$EXE" "$PNPM" --version)" = "11.7.0"
 
-          TMP="$(mktemp -d)"
+          (cd "$WORKSPACE" && env -u NODE_PATH ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" --version)
+          test "$(cd "$WORKSPACE" && env -u NODE_PATH ELECTRON_RUN_AS_NODE=1 "$EXE" "$PNPM" --version)" = "11.7.0"
+
           LOG="$TMP/harness.log"
-          DSH_HOME="$TMP/home" ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1 &
+          (cd "$WORKSPACE" && env -u NODE_PATH DSH_HOME="$TMP/home" ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1) &
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true; rm -rf "$TMP"' EXIT
           ready=0
@@ -124,5 +132,5 @@ jobs:
             --target "$TARGET_SHA" \
             --title "Pavan Workflow Desktop ${VERSION}" \
             --prerelease \
-            --notes "macOS desktop alpha. Download the DMG for Apple Silicon (arm64) or Intel (x64). The app is ad-hoc signed but not Developer ID signed/notarized, so macOS may require Open Anyway in System Settings -> Privacy & Security. DeepSeek Harness and pnpm are bundled; Node.js and CLI setup are not required for normal launch."
+            --notes "macOS desktop alpha. Download the DMG for Apple Silicon (arm64) or Intel (x64). This build is validated from an isolated packaged app so runtime dependencies cannot leak in from the CI checkout. The app is ad-hoc signed but not Developer ID signed/notarized, so macOS may require Open Anyway in System Settings -> Privacy & Security."
           gh release upload "$TAG" release-assets/*
