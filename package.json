@@ -1,6 +1,6 @@
 {
   "name": "pavans-workflow-dsh",
-  "version": "0.3.0-alpha.2",
+  "version": "0.3.0-alpha.3",
   "private": true,
   "description": "Pavan Workflow desktop distribution powered by DeepSeek Harness",
   "type": "module",
@@ -15,6 +15,7 @@
     "desktop:dist:mac": "electron-builder --mac dmg zip --publish never"
   },
   "dependencies": {
+    "@deepseek-ai/cordis-plugin-group": "1.0.1",
     "@deepseek-ai/dsh": "0.1.5-rc.2",
     "pnpm": "11.7.0"
   },
@@ -37,12 +38,14 @@
       "LICENSE"
     ],
     "directories": {
-      "output": "dist"
+      "output": "dist",
+      "buildResources": "build"
     },
     "mac": {
       "category": "public.app-category.developer-tools",
       "artifactName": "Pavan-Workflow-${version}-macos-${arch}.${ext}",
       "target": ["dmg", "zip"],
+      "icon": "build/icon.svg",
       "identity": "-",
       "hardenedRuntime": false
     },
