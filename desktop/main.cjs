@@ -33,14 +33,26 @@ function dshHome() {
   return home
 }
 
+function resourceRoot() {
+  return app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), '.desktop-runtime')
+}
+
+function nodeExecutable() {
+  const executable = path.join(resourceRoot(), 'runtime', 'node', process.platform === 'win32' ? 'node.exe' : 'node')
+  if (!fs.existsSync(executable)) throw new Error(`Bundled Node runtime is missing: ${executable}`)
+  return executable
+}
+
 function dshEntry() {
-  const entry = path.join(app.getAppPath(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
-  if (!fs.existsSync(entry)) throw new Error(`Bundled DeepSeek Harness entrypoint is missing: ${entry}`)
-  return entry
+  const entry = path.join(resourceRoot(), 'dsh-runtime', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+  const developmentEntry = path.join(resourceRoot(), 'dsh', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+  const selected = fs.existsSync(entry) ? entry : developmentEntry
+  if (!fs.existsSync(selected)) throw new Error(`Bundled DeepSeek Harness entrypoint is missing: ${selected}`)
+  return selected
 }
 
 function pnpmEntry() {
-  const entry = path.join(app.getAppPath(), 'node_modules', 'pnpm', 'bin', 'pnpm.cjs')
+  const entry = path.join(resourceRoot(), 'runtime', 'pnpm', 'bin', 'pnpm.mjs')
   if (!fs.existsSync(entry)) throw new Error(`Bundled pnpm entrypoint is missing: ${entry}`)
   return entry
 }
@@ -49,7 +61,7 @@ function toolchainBin() {
   if (cachedToolchainBin) return cachedToolchainBin
   cachedToolchainBin = prepareBundledToolchain({
     directory: path.join(app.getPath('userData'), 'toolchain'),
-    execPath: process.execPath,
+    nodePath: nodeExecutable(),
     pnpmEntry: pnpmEntry(),
   }).binDir
   return cachedToolchainBin
@@ -64,6 +76,7 @@ function runtimePath() {
     try {
       const shellEnv = { ...process.env }
       delete shellEnv.ELECTRON_RUN_AS_NODE
+      delete shellEnv.NODE_PATH
       const result = spawnSync(preferredShell, ['-ilc', `printf '\n__PAVAN_PATH__%s\n' "$PATH"`], {
         encoding: 'utf8',
         timeout: 5000,
@@ -89,13 +102,15 @@ function runtimePath() {
 }
 
 function dshEnv() {
-  return {
+  const env = {
     ...process.env,
     PATH: runtimePath(),
-    ELECTRON_RUN_AS_NODE: '1',
     DSH_HOME: dshHome(),
     DSH_TELEMETRY_DISABLED: process.env.DSH_TELEMETRY_DISABLED ?? '1',
   }
+  delete env.ELECTRON_RUN_AS_NODE
+  delete env.NODE_PATH
+  return env
 }
 
 function emitStatus(stage, message, kind = 'info') {
@@ -104,7 +119,7 @@ function emitStatus(stage, message, kind = 'info') {
 
 function runDshOnce(args, cwd, timeoutMs = 180000) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [dshEntry(), ...args], {
+    const child = spawn(nodeExecutable(), [dshEntry(), ...args], {
       cwd,
       env: dshEnv(),
       shell: false,
@@ -159,7 +174,7 @@ function startHarness(workspace) {
   return new Promise((resolve, reject) => {
     let output = ''
     emitStatus('harness', 'Starting the bundled DeepSeek Harness…')
-    harness = spawn(process.execPath, [dshEntry(), 'web', '--port', '0', '--no-open'], {
+    harness = spawn(nodeExecutable(), [dshEntry(), 'web', '--port', '0', '--no-open'], {
       cwd: workspace,
       env: dshEnv(),
       detached: process.platform !== 'win32',
@@ -261,4 +276,4 @@ else {
 }
 
 app.on('before-quit', () => { quitting = true; stopHarness() })
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); else app.quit() })
+app.on('window-all-closed', () => { app.quit() })
