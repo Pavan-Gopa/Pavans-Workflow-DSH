@@ -15,6 +15,14 @@ assert(read('.dsh/skills/pavan-workflow/SKILL.md').includes('Automatic backup is
 assert(read('PIPELINE.md').includes('quick') && read('PIPELINE.md').includes('critical'), 'lean profiles preserved')
 assert(read('install.sh').includes('dsh-plugin-codegraph'), 'installer adds Codegraph')
 assert(read('install.sh').includes('dsh-quota/releases/download/v0.8.0/dsh-quota.tgz'), 'installer pins quota bundle')
+assert(read('install.sh').includes('--preset') && read('install.sh').includes('roles.recommended.yaml'), 'installer supports recommended routing preset')
+
+const recommended = read('.dsh/roles.recommended.yaml')
+assert(recommended.includes('deepseek-official') && recommended.includes('deepseek-v4-pro'), 'recommended preset has DeepSeek Coder route')
+assert(recommended.includes('anthropic') && recommended.includes('claude-opus-4-8'), 'recommended preset has Anthropic review route')
+assert(recommended.includes('openai') && recommended.includes('gpt-5.5'), 'recommended preset has OpenAI test route')
+assert(!recommended.includes('REPLACE_ME'), 'recommended preset is concrete')
+assert(read('FIRST_RUN.md').includes('list_subagent_models') && read('FIRST_RUN.md').includes('new top-level Session'), 'first-run guide covers route preflight and session snapshot')
 
 for (const rel of ['pavan-workflow', 'ponytail', 'grilling', 'ui-designer']) {
   const text = read(`.dsh/skills/${rel}/SKILL.md`)
