@@ -73,11 +73,12 @@ jobs:
           mkdir -p "$WORKSPACE"
 
           BUNDLE="$APP/Contents/Resources/app"
+          NODE="$APP/Contents/Resources/runtime/node"
           DSH="$BUNDLE/node_modules/@deepseek-ai/dsh/lib/bin.js"
           GROUP="$BUNDLE/node_modules/@deepseek-ai/cordis-plugin-group/package.json"
           PNPM="$BUNDLE/node_modules/pnpm/bin/pnpm.cjs"
-          EXE="$APP/Contents/MacOS/Pavan Workflow"
 
+          test -x "$NODE"
           test -f "$DSH"
           test -f "$GROUP"
           test -f "$PNPM"
@@ -86,10 +87,11 @@ jobs:
 
           codesign --verify --deep --strict "$APP"
           codesign -dv --verbose=2 "$APP" 2>&1 | grep -q 'Signature=adhoc'
-          ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" --version
-          test "$(ELECTRON_RUN_AS_NODE=1 "$EXE" "$PNPM" --version)" = "11.7.0"
+          "$NODE" --version | grep -q '^v24\.'
+          "$NODE" "$DSH" --version
+          test "$("$NODE" "$PNPM" --version)" = "11.7.0"
 
-          ELECTRON_RUN_AS_NODE=1 "$EXE" -e \
+          "$NODE" -e \
             'require(process.argv[1]).installWorkflow(process.argv[2], process.argv[3])' \
             "$BUNDLE/desktop/workflow.cjs" "$BUNDLE" "$WORKSPACE"
           test -f "$WORKSPACE/.dsh/pavan-workflow-desktop.json"
@@ -98,7 +100,7 @@ jobs:
           test -f "$WORKSPACE/AI_Workflow_Kit/docs/STEPS.md"
 
           pushd "$WORKSPACE" >/dev/null
-          DSH_HOME="$ISOLATED/home" ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1 &
+          DSH_HOME="$ISOLATED/home" "$NODE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1 &
           PID=$!
           popd >/dev/null
 
@@ -115,9 +117,9 @@ jobs:
 
           READY_URL="$(grep -Eo 'http://127\.0\.0\.1:[0-9]+/\?token=[A-Za-z0-9_-]+' "$LOG" | tail -1)"
           test -n "$READY_URL"
-          ORIGIN="$(node -e 'process.stdout.write(new URL(process.argv[1]).origin)' "$READY_URL")"
+          ORIGIN="$("$NODE" -e 'process.stdout.write(new URL(process.argv[1]).origin)' "$READY_URL")"
           curl --fail --silent --show-error --location --cookie-jar "$COOKIE" --cookie "$COOKIE" "$READY_URL" --output /dev/null
-          BODY="$(node -e '
+          BODY="$("$NODE" -e '
             const { randomUUID } = require("node:crypto");
             process.stdout.write(JSON.stringify({
               type: "client-request",
@@ -127,7 +129,7 @@ jobs:
             }));
           ' "$WORKSPACE")"
           RESPONSE="$(curl --fail --silent --show-error --cookie-jar "$COOKIE" --cookie "$COOKIE" -H 'content-type: application/json' --data "$BODY" "$ORIGIN/api/workspace/create")"
-          node -e '
+          "$NODE" -e '
             const payload = JSON.parse(process.argv[1]);
             if (payload?.result?.ok !== true) {
               console.error("workspace/create failed:", JSON.stringify(payload));
@@ -186,5 +188,5 @@ jobs:
             --target "$TARGET_SHA" \
             --title "Pavan Workflow Desktop ${VERSION}" \
             --prerelease \
-            --notes "macOS desktop alpha. Download the DMG for Apple Silicon (arm64) or Intel (x64). This build includes the whale application icon and an isolated packaged-runtime qualification that verifies the selected project is prepared, registered in the Harness Workspace registry through its authenticated Remote API, and the bundled DeepSeek Harness starts without access to repository-level node_modules. The app is ad-hoc signed but not Developer ID signed/notarized, so macOS may require Open Anyway in System Settings -> Privacy & Security."
+            --notes "macOS desktop alpha. Download the DMG for Apple Silicon (arm64) or Intel (x64). This build includes the whale application icon, a bundled regular Node 24 runtime for Harness/tool execution, and isolated packaged-app qualification that verifies the selected project is prepared, registered in the Harness Workspace registry through its authenticated Remote API, and Harness starts without access to repository-level node_modules. The app is ad-hoc signed but not Developer ID signed/notarized, so macOS may require Open Anyway in System Settings -> Privacy & Security."
           gh release upload "$TAG" release-assets/*
