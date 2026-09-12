@@ -1,4 +1,7 @@
 node_modules/
+dist/
+.desktop-runtime/
+upstream-deepseek-harness/
 .DS_Store
 *.log
 .codegraph/
