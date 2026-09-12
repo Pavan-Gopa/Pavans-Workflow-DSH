@@ -1,14 +1,56 @@
 {
   "name": "pavans-workflow-dsh",
-  "version": "0.2.0",
+  "version": "0.3.0-alpha.1",
   "private": true,
-  "description": "Pavan's human-supervised multi-model workflow port for DeepSeek Harness",
+  "description": "Pavan Workflow desktop distribution powered by DeepSeek Harness",
   "type": "module",
+  "main": "desktop/main.cjs",
   "engines": { "node": ">=22" },
   "scripts": {
     "doctor": "node scripts/doctor.mjs",
     "init": "node scripts/init-state.mjs",
-    "test": "node scripts/selftest.mjs && node scripts/doctor.mjs --repo-only"
+    "test": "node scripts/selftest.mjs && node scripts/doctor.mjs --repo-only && node --test desktop/workflow.test.cjs",
+    "desktop": "electron .",
+    "desktop:check": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/workflow.cjs",
+    "desktop:dist:mac": "electron-builder --mac dmg zip --publish never"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh": "0.1.5-rc.2"
+  },
+  "devDependencies": {
+    "electron": "44.0.0",
+    "electron-builder": "26.15.3"
+  },
+  "build": {
+    "appId": "org.pavangopa.pavansworkflow",
+    "productName": "Pavan Workflow",
+    "asar": false,
+    "npmRebuild": false,
+    "files": [
+      "desktop/**/*",
+      ".dsh/roles.example.yaml",
+      ".dsh/roles.recommended.yaml",
+      ".dsh/skills/**/*",
+      "AI_Workflow_Kit/**/*",
+      "package.json",
+      "LICENSE"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "artifactName": "Pavan-Workflow-${version}-macos-${arch}.${ext}",
+      "target": ["dmg", "zip"],
+      "identity": null
+    },
+    "dmg": {
+      "sign": false,
+      "contents": [
+        { "x": 150, "y": 220 },
+        { "x": 410, "y": 220, "type": "link", "path": "/Applications" }
+      ]
+    }
   },
   "license": "MIT"
 }

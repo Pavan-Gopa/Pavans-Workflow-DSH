@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Pavan Workflow</title>
+<style>
+  :root { color-scheme: dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 15% 10%, #26334b 0, #11151d 38%, #0b0d11 100%); color: #f5f7fb; display: grid; place-items: center; }
+  main { width: min(720px, calc(100vw - 48px)); padding: 42px; border: 1px solid rgba(255,255,255,.12); border-radius: 24px; background: rgba(16,20,28,.88); box-shadow: 0 30px 80px rgba(0,0,0,.4); backdrop-filter: blur(18px); }
+  .eyebrow { color: #a8bad9; font-size: 13px; letter-spacing: .16em; text-transform: uppercase; font-weight: 700; }
+  h1 { margin: 10px 0 8px; font-size: 42px; letter-spacing: -.03em; }
+  p { color: #b9c1cf; line-height: 1.6; }
+  .path { margin: 28px 0 12px; min-height: 52px; padding: 14px 16px; border-radius: 12px; background: #090b0f; border: 1px solid #2a3140; color: #dbe5f6; overflow-wrap: anywhere; }
+  .buttons { display: flex; gap: 12px; margin-bottom: 18px; }
+  button { appearance: none; border: 0; border-radius: 11px; padding: 12px 18px; font-size: 15px; font-weight: 700; cursor: pointer; }
+  #choose { background: #293140; color: #fff; }
+  #launch { background: #eef3ff; color: #10131a; }
+  #launch:disabled { opacity: .42; cursor: not-allowed; }
+  label { display: flex; gap: 10px; align-items: center; color: #b9c1cf; font-size: 14px; }
+  #status { min-height: 52px; margin-top: 24px; padding: 14px 16px; border-radius: 12px; background: rgba(255,255,255,.05); color: #b9c1cf; white-space: pre-wrap; }
+  #status.warning { color: #ffd792; }
+  #status.error { color: #ffaaaa; }
+  .note { font-size: 12px; margin-top: 20px; color: #788397; }
+</style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">Desktop alpha</div>
+  <h1>Pavan Workflow</h1>
+  <p>Choose a project. The app installs the workflow without overwriting your existing role configuration, starts its bundled DeepSeek Harness, and opens the full Harness interface in this window.</p>
+  <div id="path" class="path">No project selected</div>
+  <div class="buttons">
+    <button id="choose">Choose project…</button>
+    <button id="launch" disabled>Open in Pavan Workflow</button>
+  </div>
+  <label><input id="plugins" type="checkbox" checked /> Install Codegraph and usage/quota plugins when needed</label>
+  <div id="status">Ready.</div>
+  <div class="note">Model API keys stay in the local Harness credential store. This alpha build is unsigned unless a macOS Developer ID certificate is configured in GitHub Actions.</div>
+</main>
+<script>
+  const pathEl = document.querySelector('#path')
+  const choose = document.querySelector('#choose')
+  const launch = document.querySelector('#launch')
+  const plugins = document.querySelector('#plugins')
+  const status = document.querySelector('#status')
+  let workspace = ''
+
+  function select(value) {
+    workspace = value || ''
+    pathEl.textContent = workspace || 'No project selected'
+    launch.disabled = !workspace
+  }
+  function setStatus(payload) {
+    status.textContent = payload?.message || String(payload || '')
+    status.className = payload?.kind || ''
+  }
+
+  window.pavanDesktop.onStatus(setStatus)
+  window.pavanDesktop.getState().then(state => select(state.lastWorkspace)).catch(() => {})
+  choose.addEventListener('click', async () => select(await window.pavanDesktop.pickWorkspace()))
+  launch.addEventListener('click', async () => {
+    choose.disabled = true
+    launch.disabled = true
+    setStatus({ message: 'Preparing project…' })
+    try {
+      await window.pavanDesktop.launch({ workspace, installPlugins: plugins.checked })
+    } catch (error) {
+      setStatus({ message: error?.message || String(error), kind: 'error' })
+      choose.disabled = false
+      launch.disabled = !workspace
+    }
+  })
+</script>
+</body>
+</html>

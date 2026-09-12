@@ -1,0 +1,28 @@
+const test = require('node:test')
+const assert = require('node:assert/strict')
+const fs = require('node:fs')
+const os = require('node:os')
+const path = require('node:path')
+const { installWorkflow } = require('./workflow.cjs')
+
+test('desktop installer copies workflow without overwriting roles', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pavan-desktop-test-'))
+  const bundle = path.join(root, 'bundle')
+  const project = path.join(root, 'project')
+  fs.mkdirSync(path.join(bundle, '.dsh', 'skills', 'pavan-workflow'), { recursive: true })
+  fs.mkdirSync(path.join(bundle, 'AI_Workflow_Kit', 'docs'), { recursive: true })
+  fs.mkdirSync(path.join(project, '.dsh'), { recursive: true })
+  fs.writeFileSync(path.join(bundle, '.dsh', 'skills', 'pavan-workflow', 'SKILL.md'), 'skill')
+  fs.writeFileSync(path.join(bundle, 'AI_Workflow_Kit', 'docs', 'STEPS.md'), 'steps')
+  fs.writeFileSync(path.join(bundle, '.dsh', 'roles.example.yaml'), 'example')
+  fs.writeFileSync(path.join(bundle, '.dsh', 'roles.recommended.yaml'), 'recommended')
+  fs.writeFileSync(path.join(project, '.dsh', 'roles.yaml'), 'custom')
+
+  installWorkflow(bundle, project)
+
+  assert.equal(fs.readFileSync(path.join(project, '.dsh', 'roles.yaml'), 'utf8'), 'custom')
+  assert.equal(fs.readFileSync(path.join(project, '.dsh', 'skills', 'pavan-workflow', 'SKILL.md'), 'utf8'), 'skill')
+  assert.equal(fs.readFileSync(path.join(project, 'AI_Workflow_Kit', 'docs', 'STEPS.md'), 'utf8'), 'steps')
+  assert.ok(fs.existsSync(path.join(project, '.dsh', 'pavan-workflow-desktop.json')))
+  fs.rmSync(root, { recursive: true, force: true })
+})

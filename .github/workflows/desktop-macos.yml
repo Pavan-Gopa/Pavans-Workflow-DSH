@@ -1,0 +1,55 @@
+name: Desktop macOS alpha
+
+on:
+  push:
+    branches: [desktop-macos]
+    paths:
+      - 'desktop/**'
+      - '.dsh/**'
+      - 'AI_Workflow_Kit/**'
+      - 'package.json'
+      - '.github/workflows/desktop-macos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Intel
+            runner: macos-15-intel
+            arch: --x64
+            artifact: pavan-workflow-macos-x64
+          - name: macOS Apple Silicon
+            runner: macos-15
+            arch: --arm64
+            artifact: pavan-workflow-macos-arm64
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm install
+      - name: Test workflow and desktop installer
+        run: npm test
+      - name: Syntax check desktop shell
+        run: npm run desktop:check
+      - name: Build unsigned DMG and ZIP
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run desktop:dist:mac -- ${{ matrix.arch }}
+      - name: Upload desktop package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          path: |
+            dist/*.dmg
+            dist/*.zip
