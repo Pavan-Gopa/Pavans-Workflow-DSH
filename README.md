@@ -20,7 +20,7 @@ Then open the DMG, drag **Pavan Workflow** to Applications, and launch it. On fi
 5. authorize child routes in **Settings -> Plugins -> Subagent model selection**;
 6. start a new session and use the `pavan-workflow` skill.
 
-> **macOS alpha signing:** current public alpha builds are unsigned unless an Apple Developer ID certificate is configured for the repository. macOS may require **Open Anyway** in System Settings -> Privacy & Security. Proper Developer ID signing/notarization is the remaining step for a warning-free double-click install.
+> **macOS alpha signing:** builds are ad-hoc signed, but they are not Apple Developer ID signed/notarized. macOS may therefore require **Open Anyway** in System Settings -> Privacy & Security. Proper Developer ID signing and notarization are the remaining steps for a warning-free double-click install.
 
 ## What the desktop app actually contains
 
@@ -28,12 +28,13 @@ Then open the DMG, drag **Pavan Workflow** to Applications, and launch it. On fi
 Pavan Workflow.app
   -> Electron desktop shell
   -> bundled official @deepseek-ai/dsh runtime
+  -> bundled pnpm + app-owned Node/pnpm shims
   -> local DSH Web UI inside the native window
   -> Pavan Workflow project skills + state templates
   -> optional Codegraph + usage/quota plugin setup
 ```
 
-DeepSeek Harness remains the engine. The desktop shell owns startup, project selection, workflow installation, local runtime lifecycle, and the native application window.
+DeepSeek Harness remains the engine. The desktop shell owns startup, project selection, workflow installation, local runtime lifecycle, toolchain bootstrap, and the native application window.
 
 ## Core workflow
 
@@ -149,7 +150,7 @@ npm run desktop:dist:mac -- --arm64
 npm run desktop:dist:mac -- --x64
 ```
 
-GitHub Actions builds both architectures and smoke-tests the **packaged** DSH runtime, not only the source tree.
+GitHub Actions builds both architectures and smoke-tests the **packaged** DSH runtime, bundled pnpm, and macOS code signature — not only the source tree.
 
 ## Safety invariants
 

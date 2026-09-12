@@ -45,7 +45,7 @@ jobs:
         run: npm test
       - name: Syntax check desktop shell
         run: npm run desktop:check
-      - name: Build unsigned DMG and ZIP
+      - name: Build ad-hoc signed DMG and ZIP
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run desktop:dist:mac -- ${{ matrix.arch }}
@@ -61,6 +61,8 @@ jobs:
           test -f "$DSH"
           test -f "$PNPM"
           test -f "$APP/Contents/Resources/app/.dsh/skills/pavan-workflow/SKILL.md"
+          codesign --verify --deep --strict "$APP"
+          codesign -dv --verbose=2 "$APP" 2>&1 | grep -q 'Signature=adhoc'
           ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" --version
           test "$(ELECTRON_RUN_AS_NODE=1 "$EXE" "$PNPM" --version)" = "11.7.0"
 
