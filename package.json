@@ -11,10 +11,11 @@
     "init": "node scripts/init-state.mjs",
     "test": "node scripts/selftest.mjs && node scripts/doctor.mjs --repo-only && node --test desktop/workflow.test.cjs desktop/toolchain.test.cjs",
     "desktop": "electron .",
-    "desktop:check": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/workflow.cjs && node --check desktop/toolchain.cjs && node --check desktop/prepare-icon.cjs && node --check desktop/prepare-runtime.cjs",
+    "desktop:check": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/workflow.cjs && node --check desktop/toolchain.cjs && node --check desktop/prepare-icon.cjs && node --check desktop/prepare-runtime.cjs && node --check desktop/prepare-dsh-runtime.cjs",
     "desktop:prepare-icon": "node desktop/prepare-icon.cjs",
     "desktop:prepare-runtime": "node desktop/prepare-runtime.cjs",
-    "desktop:dist:mac": "npm run desktop:prepare-icon && npm run desktop:prepare-runtime && electron-builder --mac dmg zip --publish never"
+    "desktop:prepare-dsh": "node desktop/prepare-dsh-runtime.cjs",
+    "desktop:dist:mac": "npm run desktop:prepare-icon && npm run desktop:prepare-runtime && npm run desktop:prepare-dsh && electron-builder --mac dmg zip --publish never"
   },
   "dependencies": {
     "@deepseek-ai/cordis-plugin-group": "1.0.1",
@@ -43,6 +44,10 @@
       {
         "from": "build/runtime/node",
         "to": "runtime/node"
+      },
+      {
+        "from": "build/dsh-runtime",
+        "to": "dsh"
       }
     ],
     "directories": {
