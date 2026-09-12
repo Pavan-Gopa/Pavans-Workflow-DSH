@@ -7,6 +7,15 @@ on:
       - 'desktop/**'
       - '.dsh/**'
       - 'AI_Workflow_Kit/**'
+      - 'build/**'
+      - 'package.json'
+      - '.github/workflows/desktop-macos.yml'
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - '.dsh/**'
+      - 'AI_Workflow_Kit/**'
+      - 'build/**'
       - 'package.json'
       - '.github/workflows/desktop-macos.yml'
   workflow_dispatch:
@@ -49,28 +58,64 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run desktop:dist:mac -- ${{ matrix.arch }}
-      - name: Smoke-test packaged Harness runtime
+      - name: Smoke-test packaged app outside the repository
         shell: bash
         run: |
           set -euo pipefail
-          APP="$(find dist -type d -name 'Pavan Workflow.app' -print -quit)"
-          test -n "$APP"
-          DSH="$APP/Contents/Resources/app/node_modules/@deepseek-ai/dsh/lib/bin.js"
-          PNPM="$APP/Contents/Resources/app/node_modules/pnpm/bin/pnpm.cjs"
+
+          SOURCE_APP="$(find dist -type d -name 'Pavan Workflow.app' -print -quit)"
+          test -n "$SOURCE_APP"
+
+          ISOLATED="$(mktemp -d)"
+          APP="$ISOLATED/Pavan Workflow.app"
+          WORKSPACE="$ISOLATED/workspace"
+          LOG="$ISOLATED/harness.log"
+          PID=''
+          cleanup() {
+            if [ -n "${PID:-}" ]; then kill "$PID" 2>/dev/null || true; fi
+            rm -rf "$ISOLATED"
+          }
+          trap cleanup EXIT
+
+          # Copy the finished app completely outside the checkout. This prevents
+          # Node from accidentally resolving a missing packaged dependency from
+          # the build machine's repository-level node_modules.
+          ditto "$SOURCE_APP" "$APP"
+          mkdir -p "$WORKSPACE"
+
+          BUNDLE="$APP/Contents/Resources/app"
+          DSH="$BUNDLE/node_modules/@deepseek-ai/dsh/lib/bin.js"
+          GROUP="$BUNDLE/node_modules/@deepseek-ai/cordis-plugin-group/package.json"
+          PNPM="$BUNDLE/node_modules/pnpm/bin/pnpm.cjs"
           EXE="$APP/Contents/MacOS/Pavan Workflow"
+
           test -f "$DSH"
+          test -f "$GROUP"
           test -f "$PNPM"
-          test -f "$APP/Contents/Resources/app/.dsh/skills/pavan-workflow/SKILL.md"
+          test -f "$BUNDLE/.dsh/skills/pavan-workflow/SKILL.md"
+          find "$APP/Contents/Resources" -name '*.icns' -print -quit | grep -q .
+
           codesign --verify --deep --strict "$APP"
           codesign -dv --verbose=2 "$APP" 2>&1 | grep -q 'Signature=adhoc'
           ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" --version
           test "$(ELECTRON_RUN_AS_NODE=1 "$EXE" "$PNPM" --version)" = "11.7.0"
 
-          TMP="$(mktemp -d)"
-          LOG="$TMP/harness.log"
-          DSH_HOME="$TMP/home" ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1 &
+          # Exercise the exact project-folder installation code from the
+          # packaged application, then prove that Harness starts with that
+          # project as its working directory.
+          ELECTRON_RUN_AS_NODE=1 "$EXE" -e \
+            'require(process.argv[1]).installWorkflow(process.argv[2], process.argv[3])' \
+            "$BUNDLE/desktop/workflow.cjs" "$BUNDLE" "$WORKSPACE"
+          test -f "$WORKSPACE/.dsh/pavan-workflow-desktop.json"
+          test -f "$WORKSPACE/.dsh/roles.yaml"
+          test -f "$WORKSPACE/.dsh/skills/pavan-workflow/SKILL.md"
+          test -f "$WORKSPACE/AI_Workflow_Kit/docs/STEPS.md"
+
+          pushd "$WORKSPACE" >/dev/null
+          DSH_HOME="$ISOLATED/home" ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1 &
           PID=$!
-          trap 'kill "$PID" 2>/dev/null || true; rm -rf "$TMP"' EXIT
+          popd >/dev/null
+
           ready=0
           for _ in $(seq 1 90); do
             if grep -q 'dsh web:' "$LOG"; then ready=1; break; fi
@@ -83,6 +128,7 @@ jobs:
           fi
           kill "$PID" 2>/dev/null || true
           wait "$PID" 2>/dev/null || true
+          PID=''
           cat "$LOG"
       - name: Upload desktop package
         uses: actions/upload-artifact@v4
