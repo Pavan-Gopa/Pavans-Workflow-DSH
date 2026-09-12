@@ -43,7 +43,7 @@
       "category": "public.app-category.developer-tools",
       "artifactName": "Pavan-Workflow-${version}-macos-${arch}.${ext}",
       "target": ["dmg", "zip"],
-      "identity": null,
+      "identity": "-",
       "hardenedRuntime": false
     },
     "dmg": {
