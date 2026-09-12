@@ -57,6 +57,10 @@ jobs:
       - name: Build ad-hoc signed DMG and ZIP
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          # electron-builder normally skips all signing on PR builds. This app
+          # uses only the public ad-hoc identity, so there are no signing
+          # credentials or secrets to expose by allowing PR signing here.
+          CSC_FOR_PULL_REQUEST: 'true'
         run: npm run desktop:dist:mac -- ${{ matrix.arch }}
       - name: Smoke-test packaged app outside the repository
         shell: bash
