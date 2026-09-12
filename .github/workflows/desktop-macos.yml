@@ -2,7 +2,7 @@ name: Desktop macOS alpha
 
 on:
   push:
-    branches: [desktop-macos]
+    branches: [desktop-macos, 'fix/desktop-runtime-e2e']
     paths:
       - 'desktop/**'
       - '.dsh/**'
@@ -49,26 +49,37 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npm run desktop:dist:mac -- ${{ matrix.arch }}
-      - name: Smoke-test packaged Harness runtime
+      - name: Smoke-test packaged Harness runtime in isolation
         shell: bash
         run: |
           set -euo pipefail
-          APP="$(find dist -type d -name 'Pavan Workflow.app' -print -quit)"
-          test -n "$APP"
+          BUILT_APP="$(find dist -type d -name 'Pavan Workflow.app' -print -quit)"
+          test -n "$BUILT_APP"
+
+          # Important: move the packaged app outside the repository checkout before
+          # launching it. Node module resolution must NOT be able to fall back to the
+          # checkout's root node_modules. This reproduces /Applications on a clean Mac.
+          TMP="$(mktemp -d)"
+          APP="$TMP/Pavan Workflow.app"
+          cp -R "$BUILT_APP" "$APP"
+          WORKSPACE="$TMP/workspace"
+          mkdir -p "$WORKSPACE"
+
           DSH="$APP/Contents/Resources/app/node_modules/@deepseek-ai/dsh/lib/bin.js"
           PNPM="$APP/Contents/Resources/app/node_modules/pnpm/bin/pnpm.cjs"
           EXE="$APP/Contents/MacOS/Pavan Workflow"
           test -f "$DSH"
           test -f "$PNPM"
+          test -f "$APP/Contents/Resources/app/node_modules/@deepseek-ai/cordis-plugin-group/lib/index.js"
           test -f "$APP/Contents/Resources/app/.dsh/skills/pavan-workflow/SKILL.md"
           codesign --verify --deep --strict "$APP"
           codesign -dv --verbose=2 "$APP" 2>&1 | grep -q 'Signature=adhoc'
-          ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" --version
-          test "$(ELECTRON_RUN_AS_NODE=1 "$EXE" "$PNPM" --version)" = "11.7.0"
 
-          TMP="$(mktemp -d)"
+          (cd "$WORKSPACE" && env -u NODE_PATH ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" --version)
+          test "$(cd "$WORKSPACE" && env -u NODE_PATH ELECTRON_RUN_AS_NODE=1 "$EXE" "$PNPM" --version)" = "11.7.0"
+
           LOG="$TMP/harness.log"
-          DSH_HOME="$TMP/home" ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1 &
+          (cd "$WORKSPACE" && env -u NODE_PATH DSH_HOME="$TMP/home" ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1) &
           PID=$!
           trap 'kill "$PID" 2>/dev/null || true; rm -rf "$TMP"' EXIT
           ready=0
