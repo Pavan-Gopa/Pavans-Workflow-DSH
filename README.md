@@ -8,8 +8,8 @@ The preferred distribution is **Pavan Workflow Desktop**. It bundles the officia
 
 Open this repository's **Releases** page and download the macOS build for your Mac:
 
-- `Pavan-Workflow-0.3.0-alpha.1-macos-arm64.dmg` — Apple Silicon (M1/M2/M3/M4 and later)
-- `Pavan-Workflow-0.3.0-alpha.1-macos-x64.dmg` — Intel Mac
+- `Pavan-Workflow-0.3.0-alpha.2-macos-arm64.dmg` — Apple Silicon (M1/M2/M3/M4 and later)
+- `Pavan-Workflow-0.3.0-alpha.2-macos-x64.dmg` — Intel Mac
 
 Then open the DMG, drag **Pavan Workflow** to Applications, and launch it. On first launch:
 
