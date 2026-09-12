@@ -1,0 +1,94 @@
+name: Desktop macOS alpha
+
+on:
+  push:
+    branches: [desktop-macos]
+    paths:
+      - 'desktop/**'
+      - '.dsh/**'
+      - 'AI_Workflow_Kit/**'
+      - 'package.json'
+      - '.github/workflows/desktop-macos.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: desktop-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Intel
+            runner: macos-15-intel
+            arch: --x64
+            artifact: pavan-workflow-macos-x64
+          - name: macOS Apple Silicon
+            runner: macos-15
+            arch: --arm64
+            artifact: pavan-workflow-macos-arm64
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Install dependencies
+        run: npm install
+      - name: Test workflow and desktop installer
+        run: npm test
+      - name: Syntax check desktop shell
+        run: npm run desktop:check
+      - name: Build ad-hoc signed DMG and ZIP
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npm run desktop:dist:mac -- ${{ matrix.arch }}
+      - name: Smoke-test packaged Harness runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="$(find dist -type d -name 'Pavan Workflow.app' -print -quit)"
+          test -n "$APP"
+          DSH="$APP/Contents/Resources/app/node_modules/@deepseek-ai/dsh/lib/bin.js"
+          PNPM="$APP/Contents/Resources/app/node_modules/pnpm/bin/pnpm.cjs"
+          EXE="$APP/Contents/MacOS/Pavan Workflow"
+          test -f "$DSH"
+          test -f "$PNPM"
+          test -f "$APP/Contents/Resources/app/.dsh/skills/pavan-workflow/SKILL.md"
+          codesign --verify --deep --strict "$APP"
+          codesign -dv --verbose=2 "$APP" 2>&1 | grep -q 'Signature=adhoc'
+          ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" --version
+          test "$(ELECTRON_RUN_AS_NODE=1 "$EXE" "$PNPM" --version)" = "11.7.0"
+
+          TMP="$(mktemp -d)"
+          LOG="$TMP/harness.log"
+          DSH_HOME="$TMP/home" ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1 &
+          PID=$!
+          trap 'kill "$PID" 2>/dev/null || true; rm -rf "$TMP"' EXIT
+          ready=0
+          for _ in $(seq 1 90); do
+            if grep -q 'dsh web:' "$LOG"; then ready=1; break; fi
+            if ! kill -0 "$PID" 2>/dev/null; then break; fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat "$LOG"
+            exit 1
+          fi
+          kill "$PID" 2>/dev/null || true
+          wait "$PID" 2>/dev/null || true
+          cat "$LOG"
+      - name: Upload desktop package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          if-no-files-found: error
+          path: |
+            dist/*.dmg
+            dist/*.zip

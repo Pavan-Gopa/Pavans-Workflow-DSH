@@ -1,12 +1,42 @@
-# Pavan's Workflow — DeepSeek Harness Edition
+# Pavan Workflow — DeepSeek Harness Edition
 
-A DeepSeek Harness (`dsh`) port of [Pavan's Workflow](https://github.com/Pavan-Gopa/Pavans-Workflow), aligned with the OMP workflow's **v3.4.2** behavior: one Human-supervised Main agent owns routing and durable state, while fresh specialist agents implement, review, test, design, architect, and audit the same project on deliberately different model routes.
+A Human-supervised, multi-model software-development workflow for DeepSeek Harness, aligned with [Pavan's Workflow](https://github.com/Pavan-Gopa/Pavans-Workflow) v3.4.2.
 
-> **Status:** developer preview. DeepSeek Harness is still evolving quickly. This repository keeps the workflow as a small overlay on top of upstream DSH instead of forking the Harness itself.
+## Download the desktop app
 
-## What this preserves
+The preferred distribution is **Pavan Workflow Desktop**. It bundles the official DeepSeek Harness runtime, so normal users do **not** need Node.js, `npm`, `npx`, `git clone`, or a terminal just to launch the app.
 
-The default loop remains:
+Open this repository's **Releases** page and download the macOS build for your Mac:
+
+- `Pavan-Workflow-0.3.0-alpha.2-macos-arm64.dmg` — Apple Silicon (M1/M2/M3/M4 and later)
+- `Pavan-Workflow-0.3.0-alpha.2-macos-x64.dmg` — Intel Mac
+
+Then open the DMG, drag **Pavan Workflow** to Applications, and launch it. On first launch:
+
+1. choose the project folder you want to work on;
+2. Pavan Workflow installs its project-local skills and workflow state without overwriting an existing `.dsh/roles.yaml`;
+3. the bundled DeepSeek Harness starts locally inside the desktop app;
+4. configure model providers in **Settings -> Models**;
+5. authorize child routes in **Settings -> Plugins -> Subagent model selection**;
+6. start a new session and use the `pavan-workflow` skill.
+
+> **macOS alpha signing:** builds are ad-hoc signed, but they are not Apple Developer ID signed/notarized. macOS may therefore require **Open Anyway** in System Settings -> Privacy & Security. Proper Developer ID signing and notarization are the remaining steps for a warning-free double-click install.
+
+## What the desktop app actually contains
+
+```text
+Pavan Workflow.app
+  -> Electron desktop shell
+  -> bundled official @deepseek-ai/dsh runtime
+  -> bundled pnpm + app-owned Node/pnpm shims
+  -> local DSH Web UI inside the native window
+  -> Pavan Workflow project skills + state templates
+  -> optional Codegraph + usage/quota plugin setup
+```
+
+DeepSeek Harness remains the engine. The desktop shell owns startup, project selection, workflow installation, local runtime lifecycle, toolchain bootstrap, and the native application window.
+
+## Core workflow
 
 ```text
 Human <-> Main
@@ -27,182 +57,117 @@ Human <-> Main
              Main verifies tests + acceptance -> next step
 ```
 
-Main is the only router. Workers do not hand work to each other, mutate workflow state, commit, push, or silently switch model routes. Every retry is a fresh worker session.
+Main is the only router. Workers do not hand work directly to one another, mutate canonical workflow state, commit/push, or silently switch model routes. Every retry uses a fresh specialist session.
 
-## The important DSH adaptation
+## Multi-model routing
 
-The normal gate loop uses DSH's **native model-selectable `subagent` tool sequentially**, not one monolithic `workflow` script. This is intentional: Main must regain control after each worker so it can inspect the actual workspace before routing the next gate.
+The included recommended first-run preset uses three independent routes:
 
-DSH's `workflow` tool is still useful, but only for independent fan-out work such as parallel research or adversarial read-only analysis where no child depends on Main verifying another child's modifications first.
-
-## OMP -> DSH mapping
-
-| OMP concept | DSH edition |
+| Role | Primary route |
 | --- | --- |
-| Main session | DSH root Web session |
-| Fresh task-agents | Native DSH `subagent` children |
-| Per-role model aliases | `.dsh/roles.yaml` exact provider/model routes |
-| Agent Hub | DSH Web child sessions / trajectory |
-| Native Todo + Alt+W dashboard | DSH `todo_write` plan UI + file-backed canonical state |
-| Graphify | `dsh-plugin-codegraph` + native LSP/source verification |
-| Ponytail | Project-local DSH `ponytail` skill |
-| Grilling | Project-local DSH `grilling` skill |
-| UI Designer | Project-local DSH `ui-designer` skill + Design Advisor/Designer roles |
-| Context Economy plumbing | DSH native compaction + token pressure accounting |
-| `omp usage` / Stats | `dsh-quota` in DSH Web |
-| OMP role backups | Explicit Human-authorized backup route per role |
+| Coder | `deepseek-official / deepseek-v4-pro` |
+| Reviewer | `anthropic / claude-opus-4-8` |
+| Tester | `openai / gpt-5.5` |
+| Architect | `anthropic / claude-opus-4-8` |
+| Security | `openai / gpt-5.5` |
+| Design Advisor | `anthropic / claude-opus-4-8` |
+| Designer | `openai / gpt-5.5` |
 
-## Why Codegraph instead of Graphify
+Backups are cross-provider and **Human-authorized only**. No automatic failover is allowed.
 
-`dsh-plugin-codegraph` is native to DSH and exposes structural operations such as symbol search, callers/callees, impact, trace, exploration, and context from a local tree-sitter index. It is the preferred navigation layer when installed; LSP/text search remain fallbacks, and real source is always the source of truth.
-
-The workflow never treats a graph result as proof that code is correct.
-
-## Usage and subscription limits
-
-The installer adds the pinned `dsh-quota` Web plugin. It follows the active DSH route/model and can show:
-
-- session, daily, and rolling Token usage;
-- estimated cost by billing route/model;
-- provider balance, spending limits, or quota windows where the provider exposes an API for them;
-- OpenRouter, DeepSeek Official, MiniMax, SiliconFlow native account data;
-- local Token/cost accounting for several additional routes.
-
-No plugin can invent a provider subscription limit that the provider does not expose.
+The exact routes are examples, not a requirement. If your configured provider exposes different model IDs, edit the project-local `.dsh/roles.yaml` to match the exact IDs DSH exposes.
 
 ## Pipeline profiles
 
-The port preserves OMP v3.4.x profiles:
-
 - **standard** — Coder -> Reviewer -> Tester (default).
-- **quick** — may close after Main reruns Objective Gates, but is forbidden for high-risk or auth/credential/API/schema/migration/trust-boundary diffs.
-- **critical** — Reviewer and Tester stay on; Main offers a scoped Security pass when the blast radius warrants it.
+- **quick** — may close after green Objective Gates, but is forbidden for high-risk or auth/credential/API/schema/migration/trust-boundary diffs.
+- **critical** — Reviewer and Tester remain on; Main offers a scoped Security pass when warranted.
 
 See [`PIPELINE.md`](PIPELINE.md).
 
-## Optional design path
+## OMP -> DSH mapping
 
-Designer is never automatic.
+| Original concept | DSH edition |
+| --- | --- |
+| Main session | DSH root session |
+| Fresh task-agents | native model-selectable `subagent` children |
+| Per-role aliases | `.dsh/roles.yaml` exact provider/model routes |
+| Agent Hub | DSH child sessions / trajectory |
+| Todo/dashboard | DSH `todo_write` + file-backed canonical state |
+| Graphify | `dsh-plugin-codegraph` + native LSP/source verification |
+| Ponytail | project-local DSH `ponytail` skill |
+| Grilling | project-local DSH `grilling` skill |
+| UI Designer | project-local DSH `ui-designer` skill + design roles |
+| Context economy | DSH native compaction/token-pressure system |
+| `omp usage` | `dsh-quota` Web plugin |
+
+## Why the normal gate loop uses `subagent`
+
+The normal pipeline deliberately dispatches specialists sequentially. Main must regain control after Coder, inspect the actual workspace/diff, rerun deterministic gates, and only then dispatch Reviewer. The same rule applies before Tester.
+
+DSH `workflow` / `parallel()` remains useful for independent read-only research or adversarial analysis where children do not depend on prior mutations.
+
+## Canonical state
+
+The project overlay keeps durable state under:
 
 ```text
-Human visual feedback
-  -> Design Advisor (read-only brief) -> Coder -> Reviewer -> Tester -> Human acceptance
-
-or, when explicitly requested:
-
-Human visual feedback
-  -> Designer (bounded UI edits) -> Main verify -> Reviewer -> Tester -> Human acceptance
+AI_Workflow_Kit/docs/AI/STATE.yaml
+AI_Workflow_Kit/docs/STEPS.md
+AI_Workflow_Kit/docs/DECISIONS.md
+AI_Workflow_Kit/docs/AI/FEEDBACK.md
 ```
 
-## Native DSH features this port deliberately reuses
+Only Main owns semantic workflow state.
 
-- **Model-selected subagent routes** with exact user-authorized `{provider, model}` allowlists.
-- **`list_subagent_models`** to discover/verify routes available to the current Session.
-- **`todo_write`** for the live Web plan; canonical semantic completion remains in `STEPS.md`.
-- **Built-in compaction and token-pressure handling** rather than copying OMP context-economy machinery.
-- **Project-local skills** under `.dsh/skills/`.
-- **LSP, Web trajectory, and child sessions** for inspection.
+## Developer / CLI installation
 
-## Requirements
-
-- Node.js 22+
-- DeepSeek Harness CLI (`dsh`) installed
-- DSH Web, strongly recommended for this edition
-- At least two authorized model routes if you want genuine cross-model review
-
-## Install into a project
-
-Clone this repository somewhere, then point the installer at the product repository:
+The desktop app is the preferred end-user path, but the overlay can still be installed manually:
 
 ```bash
 git clone https://github.com/Pavan-Gopa/Pavans-Workflow-DSH.git
 cd Pavans-Workflow-DSH
-./install.sh --target /path/to/your/project
+./install.sh --target /path/to/project --preset recommended
+cd /path/to/project
+npx @deepseek-ai/dsh web
 ```
 
-The installer is collision-safe: it will not overwrite an existing `.dsh/roles.yaml`, skills, or `AI_Workflow_Kit` tree in another project.
+See [`FIRST_RUN.md`](FIRST_RUN.md) and [`ROUTING_TEST.md`](ROUTING_TEST.md).
 
-Then:
+## Desktop development
 
 ```bash
-dsh web
+npm install
+npm test
+npm run desktop:check
+npm run desktop
 ```
 
-In **Settings -> Plugins -> Subagent model selection**:
+Build macOS installers with:
 
-1. enable model selection;
-2. authorize every exact provider/model route that appears in `.dsh/roles.yaml`;
-3. start a **new top-level Session** after saving. DSH snapshots the allowlist into new Sessions, so changing the setting does not retroactively expand an already-running Session.
-
-Open the product workspace and tell Main:
-
-> Use the `pavan-workflow` skill for this task: <your task>.
-
-Before expensive work, run [`ROUTING_TEST.md`](ROUTING_TEST.md).
-
-## Role configuration
-
-`install.sh` creates `.dsh/roles.yaml` from `.dsh/roles.example.yaml` if needed. Replace every `REPLACE_ME` value with exact provider/model IDs from your DSH installation.
-
-Main's own route is selected by the root DSH Session. Child roles have independent routes:
-
-- Coder
-- Reviewer
-- Tester
-- Architect
-- Security
-- Design Advisor
-- Designer
-
-Every role may define a backup, but automatic backup use is forbidden. A provider failure pauses the workflow until the Human explicitly authorizes that role's backup.
-
-## Repository layout
-
-```text
-.dsh/
-  roles.example.yaml
-  skills/
-    pavan-workflow/SKILL.md
-    ponytail/SKILL.md
-    grilling/SKILL.md
-    ui-designer/
-AI_Workflow_Kit/
-  docs/
-    PROJECT_CONTEXT.md
-    STEPS.md
-    DECISIONS.md
-    AI/
-      STATE.yaml
-      FEEDBACK.md
-      LEAN_PIPELINE.md
-  script/
-    workflow_gates.py
-    workflow_security_scope.py
-scripts/
-  doctor.mjs
-  init-state.mjs
-  selftest.mjs
-docs/
-  ARCHITECTURE.md
-  PLUGIN_DECISIONS.md
+```bash
+npm run desktop:dist:mac -- --arm64
+npm run desktop:dist:mac -- --x64
 ```
+
+GitHub Actions builds both architectures and smoke-tests the **packaged** DSH runtime, bundled pnpm, and macOS code signature — not only the source tree.
 
 ## Safety invariants
 
 1. Main is the only workflow-state writer and router.
-2. Conversation history is not authoritative; canonical files and the real repository are.
+2. Conversation history is not authoritative; canonical files and real repository state are.
 3. Main verifies every worker result before routing.
-4. Fresh workers receive a compact self-contained assignment, not the entire Main transcript.
+4. Fresh workers receive bounded, self-contained assignments.
 5. Backups are Human-authorized, never automatic.
-6. Provider/model failures do not count as product implementation failures.
+6. Provider/model failures do not count as implementation failures.
 7. Three materially identical no-progress failures stop automatic retrying.
 8. `quick` never outranks security or public-contract risk.
-9. Workers never commit/push unless a Human changes the contract explicitly for that task.
-10. Model-route evidence is part of the gate: a mismatched child route blocks the claim of independent multi-model review.
+9. Workers never commit/push unless a Human explicitly changes the contract.
+10. Effective child route evidence is part of the gate.
 
-## Versioning note
+## Status
 
-This project tracks the **behavioral contract** of Pavan's Workflow, not its implementation internals. OMP-specific dashboard/extensions are intentionally replaced with native DSH services where DSH already solves the same problem.
+Both this project and DeepSeek Harness are in developer preview. The desktop shell intentionally stays thin so upstream DSH can be upgraded without maintaining a permanent fork.
 
 ## License
 
