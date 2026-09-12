@@ -4,21 +4,22 @@ A Human-supervised, multi-model software-development workflow for DeepSeek Harne
 
 ## Download the desktop app
 
-The preferred distribution is **Pavan Workflow Desktop**. It bundles the official DeepSeek Harness runtime, so normal users do **not** need Node.js, `npm`, `npx`, `git clone`, or a terminal just to launch the app.
+The preferred distribution is **Pavan Workflow Desktop**. It bundles the DeepSeek Harness runtime, so normal users do **not** need Node.js, `npm`, `npx`, `git clone`, or a terminal just to launch the app.
 
-Open this repository's **Releases** page and download the macOS build for your Mac:
+Open this repository's **Releases** page and download the newest macOS build for your Mac. The next qualified build is `0.3.0-alpha.3`:
 
-- `Pavan-Workflow-0.3.0-alpha.2-macos-arm64.dmg` — Apple Silicon (M1/M2/M3/M4 and later)
-- `Pavan-Workflow-0.3.0-alpha.2-macos-x64.dmg` — Intel Mac
+- `Pavan-Workflow-0.3.0-alpha.3-macos-arm64.dmg` — Apple Silicon (M1/M2/M3/M4 and later)
+- `Pavan-Workflow-0.3.0-alpha.3-macos-x64.dmg` — Intel Mac
 
 Then open the DMG, drag **Pavan Workflow** to Applications, and launch it. On first launch:
 
 1. choose the project folder you want to work on;
-2. Pavan Workflow installs its project-local skills and workflow state without overwriting an existing `.dsh/roles.yaml`;
+2. Pavan Workflow installs/updates its managed project-local skills and helpers while preserving project state and an existing `.dsh/roles.yaml`;
 3. the bundled DeepSeek Harness starts locally inside the desktop app;
-4. configure model providers in **Settings -> Models**;
-5. authorize child routes in **Settings -> Plugins -> Subagent model selection**;
-6. start a new session and use the `pavan-workflow` skill.
+4. the chosen directory is registered through Harness' persistent Workspace API, not merely used as the process working directory;
+5. configure model providers in **Settings -> Models**;
+6. authorize child routes in **Settings -> Plugins -> Subagent model selection**;
+7. start a new session and use the `pavan-workflow` skill.
 
 > **macOS alpha signing:** builds are ad-hoc signed, but they are not Apple Developer ID signed/notarized. macOS may therefore require **Open Anyway** in System Settings -> Privacy & Security. Proper Developer ID signing and notarization are the remaining steps for a warning-free double-click install.
 
@@ -27,14 +28,28 @@ Then open the DMG, drag **Pavan Workflow** to Applications, and launch it. On fi
 ```text
 Pavan Workflow.app
   -> Electron desktop shell
-  -> bundled official @deepseek-ai/dsh runtime
+  -> bundled @deepseek-ai/dsh runtime + required runtime peers
   -> bundled pnpm + app-owned Node/pnpm shims
   -> local DSH Web UI inside the native window
   -> Pavan Workflow project skills + state templates
   -> optional Codegraph + usage/quota plugin setup
 ```
 
-DeepSeek Harness remains the engine. The desktop shell owns startup, project selection, workflow installation, local runtime lifecycle, toolchain bootstrap, and the native application window.
+DeepSeek Harness remains the engine. The desktop shell owns startup, project selection, workflow installation/upgrades, Workspace registration, local runtime lifecycle, toolchain bootstrap, and the native application window.
+
+### Desktop release qualification
+
+A desktop release is not accepted merely because source tests pass. GitHub Actions must, on **both Apple Silicon and Intel**:
+
+1. build the DMG/ZIP;
+2. copy the completed `.app` outside the repository checkout, so it cannot accidentally resolve dependencies from build-time `node_modules`;
+3. verify the packaged DSH runtime, required Cordis runtime peer, bundled pnpm, workflow skills, generated macOS icon, and code signature;
+4. invoke the workflow installer from the packaged app against a fresh temporary project;
+5. verify project-local roles, skills, marker, and canonical state are actually written;
+6. start the packaged Harness from that project and wait for its real ready signal;
+7. authenticate through the same browser-token exchange used by DSH and require `workspace/create` to register the selected project successfully.
+
+This gate exists specifically to catch failures that only appear after the app is moved to `/Applications`.
 
 ## Core workflow
 
@@ -118,7 +133,7 @@ AI_Workflow_Kit/docs/DECISIONS.md
 AI_Workflow_Kit/docs/AI/FEEDBACK.md
 ```
 
-Only Main owns semantic workflow state.
+Only Main owns semantic workflow state. Desktop upgrades preserve these project-owned files and `.dsh/roles.yaml`; distribution-owned skills/helpers are refreshed to the app version.
 
 ## Developer / CLI installation
 
@@ -150,7 +165,7 @@ npm run desktop:dist:mac -- --arm64
 npm run desktop:dist:mac -- --x64
 ```
 
-GitHub Actions builds both architectures and smoke-tests the **packaged** DSH runtime, bundled pnpm, and macOS code signature — not only the source tree.
+GitHub Actions builds both architectures and tests the **isolated packaged application**, not only the source tree.
 
 ## Safety invariants
 
@@ -167,7 +182,7 @@ GitHub Actions builds both architectures and smoke-tests the **packaged** DSH ru
 
 ## Status
 
-Both this project and DeepSeek Harness are in developer preview. The desktop shell intentionally stays thin so upstream DSH can be upgraded without maintaining a permanent fork.
+Both this project and DeepSeek Harness are in developer preview. The desktop shell intentionally stays thin enough to follow upstream DSH, but a release is only published after isolated packaged-runtime qualification on both supported macOS architectures.
 
 ## License
 
