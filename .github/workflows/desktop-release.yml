@@ -17,6 +17,7 @@ concurrency:
 
 env:
   DSH_UPSTREAM_REF: c291e7961a515f6d7af9304e7fd1d257929aef26
+  DSH_RUNTIME_PNPM_VERSION: 11.7.0
 
 jobs:
   build:
@@ -58,7 +59,7 @@ jobs:
       - name: Install upstream Harness workspace
         working-directory: upstream-deepseek-harness
         run: pnpm install --frozen-lockfile
-      - name: Adapt upstream runtime signing for ad-hoc alpha
+      - name: Adapt upstream runtime preparation for ad-hoc alpha
         shell: bash
         run: |
           set -euo pipefail
@@ -67,11 +68,25 @@ jobs:
           const fs = require('node:fs')
           const file = process.argv[2]
           let body = fs.readFileSync(file, 'utf8')
-          const before = "if (process.platform === 'darwin') {"
-          const after = "if (false && process.platform === 'darwin') {"
-          if (!body.includes(before)) throw new Error('Upstream prepare-dsh signing gate changed; refusing an unreviewed patch')
-          body = body.replace(before, after)
+
+          const signingBefore = "if (process.platform === 'darwin') {\n      await signMacOSRuntime(DSH_OUTPUT_ROOT, resolveDesktopAppId(process.env), resolveMacOSSigningEnvironment(process.env))\n    }"
+          const signingAfter = "if (false && process.platform === 'darwin') {\n      await signMacOSRuntime(DSH_OUTPUT_ROOT, resolveDesktopAppId(process.env), resolveMacOSSigningEnvironment(process.env))\n    }"
+          const signingMatches = body.split(signingBefore).length - 1
+          if (signingMatches !== 1) {
+            throw new Error(`Expected exactly one upstream macOS signing block, found ${signingMatches}`)
+          }
+          body = body.replace(signingBefore, signingAfter)
+
+          const frozenBefore = "await runPnpm(['install', '--prod', '--frozen-lockfile', '--trust-lockfile'])"
+          const frozenAfter = "await runPnpm(['install', '--prod', '--no-frozen-lockfile', '--trust-lockfile'])"
+          const frozenMatches = body.split(frozenBefore).length - 1
+          if (frozenMatches !== 1) {
+            throw new Error(`Expected exactly one generated-runtime frozen install, found ${frozenMatches}`)
+          }
+          body = body.replace(frozenBefore, frozenAfter)
+
           fs.writeFileSync(file, body)
+          console.log('Patched upstream alpha runtime preparation: ad-hoc signing + generated lockfile refresh.')
           NODE
       - name: Prepare complete upstream Desktop runtime closure
         working-directory: upstream-deepseek-harness
@@ -122,7 +137,7 @@ jobs:
           codesign -dv --verbose=2 "$APP" 2>&1 | grep -q 'Signature=adhoc'
 
           (cd "$WORKSPACE" && env -u NODE_PATH "$NODE" "$DSH" --version)
-          test "$(cd "$WORKSPACE" && env -u NODE_PATH "$NODE" "$PNPM" --version)" = "11.7.0"
+          test "$(cd "$WORKSPACE" && env -u NODE_PATH "$NODE" "$PNPM" --version)" = "$DSH_RUNTIME_PNPM_VERSION"
 
           LOG="$TMP/harness.log"
           (cd "$WORKSPACE" && env -u NODE_PATH DSH_HOME="$TMP/home" DSH_TELEMETRY_DISABLED=1 "$NODE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1) &
