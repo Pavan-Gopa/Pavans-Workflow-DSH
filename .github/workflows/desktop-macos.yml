@@ -59,6 +59,21 @@ jobs:
       - name: Install upstream Harness workspace
         working-directory: upstream-deepseek-harness
         run: pnpm install --frozen-lockfile
+      - name: Adapt upstream runtime signing for ad-hoc alpha
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="upstream-deepseek-harness/apps/desktop/scripts/prepare-dsh.ts"
+          node - "$FILE" <<'NODE'
+          const fs = require('node:fs')
+          const file = process.argv[2]
+          let body = fs.readFileSync(file, 'utf8')
+          const before = "if (process.platform === 'darwin') {"
+          const after = "if (false && process.platform === 'darwin') {"
+          if (!body.includes(before)) throw new Error('Upstream prepare-dsh signing gate changed; refusing an unreviewed patch')
+          body = body.replace(before, after)
+          fs.writeFileSync(file, body)
+          NODE
       - name: Prepare complete upstream Desktop runtime closure
         working-directory: upstream-deepseek-harness
         run: pnpm --filter @deepseek-ai/dsh-desktop run prepare:package -- ${{ matrix.dsh_target }}
@@ -124,6 +139,9 @@ jobs:
             cat "$LOG"
             exit 1
           fi
+          URL="$(sed -nE 's/.*dsh web:[[:space:]]+(http:\/\/127\.0\.0\.1:[0-9]+[^[:space:]]*).*/\1/p' "$LOG" | tail -1)"
+          test -n "$URL"
+          curl --fail --silent --show-error --max-time 10 "$URL" >/dev/null
           kill "$PID" 2>/dev/null || true
           wait "$PID" 2>/dev/null || true
           cat "$LOG"
