@@ -11,6 +11,7 @@ let harnessOrigin
 let quitting = false
 let cachedRuntimePath
 let cachedToolchainBin
+let cachedNodeRuntime
 
 const READY = /(?:^|\n)dsh web:\s+(http:\/\/127\.0\.0\.1:\d+(?:\/[^\s]*)?)(?:\s|$)/
 
@@ -33,6 +34,37 @@ function dshHome() {
   return home
 }
 
+function nodeRuntime() {
+  if (cachedNodeRuntime) return cachedNodeRuntime
+
+  if (app.isPackaged) {
+    const bundled = path.join(process.resourcesPath, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node')
+    if (!fs.existsSync(bundled)) {
+      throw new Error(`The bundled Node runtime is missing: ${bundled}`)
+    }
+    cachedNodeRuntime = bundled
+    return bundled
+  }
+
+  const explicit = process.env.PAVAN_NODE_RUNTIME
+  if (explicit && fs.existsSync(explicit)) {
+    cachedNodeRuntime = explicit
+    return explicit
+  }
+
+  const locator = process.platform === 'win32' ? 'where' : '/usr/bin/which'
+  try {
+    const result = spawnSync(locator, ['node'], { encoding: 'utf8', timeout: 5000 })
+    const found = String(result.stdout || '').split(/\r?\n/).find(Boolean)
+    if (found && fs.existsSync(found)) {
+      cachedNodeRuntime = found
+      return found
+    }
+  } catch {}
+
+  throw new Error('A regular Node runtime is required for Desktop development. Set PAVAN_NODE_RUNTIME to a Node executable.')
+}
+
 function assertBundledRuntime() {
   const root = app.getAppPath()
   const required = [
@@ -40,6 +72,7 @@ function assertBundledRuntime() {
     path.join(root, 'node_modules', '@deepseek-ai', 'cordis-plugin-group', 'package.json'),
     path.join(root, 'node_modules', 'pnpm', 'bin', 'pnpm.cjs'),
   ]
+  if (app.isPackaged) required.push(path.join(process.resourcesPath, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node'))
   const missing = required.filter(file => !fs.existsSync(file))
   if (missing.length) {
     throw new Error(
@@ -63,7 +96,7 @@ function toolchainBin() {
   if (cachedToolchainBin) return cachedToolchainBin
   cachedToolchainBin = prepareBundledToolchain({
     directory: path.join(app.getPath('userData'), 'toolchain'),
-    execPath: process.execPath,
+    execPath: nodeRuntime(),
     pnpmEntry: pnpmEntry(),
   }).binDir
   return cachedToolchainBin
@@ -103,10 +136,11 @@ function runtimePath() {
 }
 
 function dshEnv() {
+  const env = { ...process.env }
+  delete env.ELECTRON_RUN_AS_NODE
   return {
-    ...process.env,
+    ...env,
     PATH: runtimePath(),
-    ELECTRON_RUN_AS_NODE: '1',
     DSH_HOME: dshHome(),
     DSH_TELEMETRY_DISABLED: process.env.DSH_TELEMETRY_DISABLED ?? '1',
   }
@@ -118,7 +152,7 @@ function emitStatus(stage, message, kind = 'info') {
 
 function runDshOnce(args, cwd, timeoutMs = 180000) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [dshEntry(), ...args], {
+    const child = spawn(nodeRuntime(), [dshEntry(), ...args], {
       cwd,
       env: dshEnv(),
       shell: false,
@@ -174,7 +208,7 @@ function startHarness(workspace) {
     let output = ''
     harnessOrigin = null
     emitStatus('harness', 'Starting the bundled DeepSeek Harness…')
-    harness = spawn(process.execPath, [dshEntry(), 'web', '--port', '0', '--no-open'], {
+    harness = spawn(nodeRuntime(), [dshEntry(), 'web', '--port', '0', '--no-open'], {
       cwd: workspace,
       env: dshEnv(),
       detached: process.platform !== 'win32',
