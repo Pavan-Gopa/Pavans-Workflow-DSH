@@ -16,5 +16,17 @@ jobs:
         run: npm test
       - name: Installer syntax
         run: bash -n install.sh
+      - name: Recommended preset installer smoke
+        run: |
+          set -euo pipefail
+          target="$(mktemp -d)"
+          git -C "$target" init
+          ./install.sh --target "$target" --preset recommended --skip-plugins
+          test -f "$target/.dsh/roles.yaml"
+          test -f "$target/.dsh/roles.recommended.yaml"
+          grep -q 'deepseek-v4-pro' "$target/.dsh/roles.yaml"
+          grep -q 'claude-opus-4-8' "$target/.dsh/roles.yaml"
+          grep -q 'gpt-5.5' "$target/.dsh/roles.yaml"
+          ! grep -q 'REPLACE_ME' "$target/.dsh/roles.yaml"
       - name: Python syntax
         run: python3 -m py_compile AI_Workflow_Kit/script/workflow_gates.py AI_Workflow_Kit/script/workflow_security_scope.py
