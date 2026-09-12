@@ -33,16 +33,30 @@ function dshHome() {
   return home
 }
 
+function assertBundledRuntime() {
+  const root = app.getAppPath()
+  const required = [
+    path.join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
+    path.join(root, 'node_modules', '@deepseek-ai', 'cordis-plugin-group', 'package.json'),
+    path.join(root, 'node_modules', 'pnpm', 'bin', 'pnpm.cjs'),
+  ]
+  const missing = required.filter(file => !fs.existsSync(file))
+  if (missing.length) {
+    throw new Error(
+      `The Pavan Workflow application bundle is incomplete. Missing runtime file(s):\n${missing.join('\n')}\n\n` +
+      'This is a packaging bug, not a problem with your selected project folder.'
+    )
+  }
+}
+
 function dshEntry() {
-  const entry = path.join(app.getAppPath(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
-  if (!fs.existsSync(entry)) throw new Error(`Bundled DeepSeek Harness entrypoint is missing: ${entry}`)
-  return entry
+  assertBundledRuntime()
+  return path.join(app.getAppPath(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
 }
 
 function pnpmEntry() {
-  const entry = path.join(app.getAppPath(), 'node_modules', 'pnpm', 'bin', 'pnpm.cjs')
-  if (!fs.existsSync(entry)) throw new Error(`Bundled pnpm entrypoint is missing: ${entry}`)
-  return entry
+  assertBundledRuntime()
+  return path.join(app.getAppPath(), 'node_modules', 'pnpm', 'bin', 'pnpm.cjs')
 }
 
 function toolchainBin() {
@@ -158,6 +172,7 @@ function stopHarness() {
 function startHarness(workspace) {
   return new Promise((resolve, reject) => {
     let output = ''
+    harnessOrigin = null
     emitStatus('harness', 'Starting the bundled DeepSeek Harness…')
     harness = spawn(process.execPath, [dshEntry(), 'web', '--port', '0', '--no-open'], {
       cwd: workspace,
@@ -168,22 +183,34 @@ function startHarness(workspace) {
       stdio: ['ignore', 'pipe', 'pipe'],
     })
 
-    const timeout = setTimeout(() => reject(new Error('DeepSeek Harness did not become ready within 120 seconds.')), 120000)
+    let settled = false
+    const fail = error => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      reject(error)
+    }
+    const succeed = url => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      resolve(url)
+    }
+    const timeout = setTimeout(() => {
+      stopHarness()
+      fail(new Error('DeepSeek Harness did not become ready within 120 seconds.'))
+    }, 120000)
     const receive = chunk => {
       output = (output + String(chunk)).slice(-24000)
       const match = output.match(READY)
-      if (match?.[1]) {
-        clearTimeout(timeout)
-        resolve(match[1])
-      }
+      if (match?.[1]) succeed(match[1])
     }
     harness.stdout?.on('data', receive)
     harness.stderr?.on('data', receive)
-    harness.once('error', error => { clearTimeout(timeout); reject(error) })
+    harness.once('error', fail)
     harness.once('exit', (code, signal) => {
-      if (!quitting && !harnessOrigin) {
-        clearTimeout(timeout)
-        reject(new Error(`DeepSeek Harness exited before startup (code ${code}, signal ${signal}).\n${output.slice(-5000)}`))
+      if (!quitting && !harnessOrigin && !settled) {
+        fail(new Error(`DeepSeek Harness exited before startup (code ${code}, signal ${signal}).\n${output.slice(-5000)}`))
       }
     })
   })
@@ -237,13 +264,23 @@ ipcMain.handle('desktop:pick-workspace', async () => {
 ipcMain.handle('desktop:launch', async (_event, options) => {
   const workspace = path.resolve(String(options?.workspace ?? ''))
   if (!workspace || !fs.existsSync(workspace)) throw new Error('Choose an existing project folder first.')
+
   emitStatus('workflow', 'Installing Pavan Workflow into the selected project…')
   const installed = installWorkflow(app.getAppPath(), workspace)
-  const state = { ...readState(), lastWorkspace: workspace }
-  writeState(state)
+  writeState({ ...readState(), lastWorkspace: workspace })
+  emitStatus('workflow', `Project prepared successfully: ${workspace}`)
 
   if (options?.installPlugins !== false) await ensureRecommendedPlugins(workspace)
-  const url = await startHarness(workspace)
+
+  let url
+  try {
+    url = await startHarness(workspace)
+  } catch (error) {
+    throw new Error(
+      `The project folder was prepared successfully, but the bundled DeepSeek Harness failed to start.\n\n${error.message}`
+    )
+  }
+
   emitStatus('ready', 'Harness is ready. Opening the workspace…')
   secureHarnessNavigation(url)
   await window.loadURL(url)
@@ -261,4 +298,4 @@ else {
 }
 
 app.on('before-quit', () => { quitting = true; stopHarness() })
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); else app.quit() })
+app.on('window-all-closed', () => app.quit())
