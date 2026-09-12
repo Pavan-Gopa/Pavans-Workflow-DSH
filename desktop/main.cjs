@@ -39,9 +39,7 @@ function nodeRuntime() {
 
   if (app.isPackaged) {
     const bundled = path.join(process.resourcesPath, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node')
-    if (!fs.existsSync(bundled)) {
-      throw new Error(`The bundled Node runtime is missing: ${bundled}`)
-    }
+    if (!fs.existsSync(bundled)) throw new Error(`The bundled Node runtime is missing: ${bundled}`)
     cachedNodeRuntime = bundled
     return bundled
   }
@@ -65,14 +63,23 @@ function nodeRuntime() {
   throw new Error('A regular Node runtime is required for Desktop development. Set PAVAN_NODE_RUNTIME to a Node executable.')
 }
 
+function dshRuntimeRoot() {
+  if (app.isPackaged) return path.join(process.resourcesPath, 'dsh')
+  const prepared = path.join(app.getAppPath(), 'build', 'dsh-runtime')
+  if (fs.existsSync(path.join(prepared, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'))) return prepared
+  return app.getAppPath()
+}
+
 function assertBundledRuntime() {
-  const root = app.getAppPath()
+  const root = dshRuntimeRoot()
   const required = [
     path.join(root, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'),
-    path.join(root, 'node_modules', '@deepseek-ai', 'cordis-plugin-group', 'package.json'),
     path.join(root, 'node_modules', 'pnpm', 'bin', 'pnpm.cjs'),
   ]
-  if (app.isPackaged) required.push(path.join(process.resourcesPath, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node'))
+  if (app.isPackaged) {
+    required.push(path.join(process.resourcesPath, 'runtime', process.platform === 'win32' ? 'node.exe' : 'node'))
+    required.push(path.join(root, 'pavan-runtime.json'))
+  }
   const missing = required.filter(file => !fs.existsSync(file))
   if (missing.length) {
     throw new Error(
@@ -84,12 +91,12 @@ function assertBundledRuntime() {
 
 function dshEntry() {
   assertBundledRuntime()
-  return path.join(app.getAppPath(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+  return path.join(dshRuntimeRoot(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
 }
 
 function pnpmEntry() {
   assertBundledRuntime()
-  return path.join(app.getAppPath(), 'node_modules', 'pnpm', 'bin', 'pnpm.cjs')
+  return path.join(dshRuntimeRoot(), 'node_modules', 'pnpm', 'bin', 'pnpm.cjs')
 }
 
 function toolchainBin() {
@@ -271,10 +278,6 @@ function secureHarnessNavigation(url) {
 }
 
 async function registerWorkspace(workspace) {
-  // The DSH workspace registry is independent from the process cwd. Register
-  // the directory through the supported Remote endpoint after the first page
-  // load establishes Harness' local auth cookie. The HTTP carrier requires the
-  // normal Typert client-request envelope, not a raw { args } object.
   const encodedPath = JSON.stringify(workspace)
   const result = await window.webContents.executeJavaScript(`
     (async () => {
