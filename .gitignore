@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+*.log
+.codegraph/
+.dsh/roles.yaml
+AI_Workflow_Kit/reports/
+AI_Workflow_Kit/docs/AI/*.local.*

@@ -1,0 +1,46 @@
+workflow_version: "dsh-0.2.0"
+source_contract: "Pavans-Workflow v3.4.2"
+status: idle
+current_step: null
+current_work_item_id: null
+current_work_item: null
+active_role: null
+
+pipeline:
+  profile: standard
+  authorized_by: null
+  authorized_at: null
+  quick_forbidden: false
+  note: null
+
+route:
+  requested_provider: null
+  requested_model: null
+  verified_provider: null
+  verified_model: null
+  route_verified: false
+
+attempt:
+  product_attempt_count: 0
+  repeated_failure_count: 0
+  failure_signature: null
+  last_verified_evidence: null
+
+backup:
+  authorized: false
+  role: null
+  provider: null
+  model: null
+  human_instruction: null
+
+security:
+  next_run: none
+  last_status: null
+
+design:
+  requested: false
+  mode: null
+  human_visual_acceptance: null
+
+completed_steps: []
+blocker: null

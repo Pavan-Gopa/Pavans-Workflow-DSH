@@ -1,0 +1,39 @@
+version: 1
+
+policy:
+  automatic_backup: false
+  require_human_backup_authorization: true
+  require_route_verification: true
+  one_specialist_at_a_time: true
+
+# Main/Orchestrator uses the provider/model selected for the DSH root Session.
+# Child role routes below must also be authorized in:
+# Settings -> Plugins -> Subagent model selection.
+roles:
+  coder:
+    primary: { provider: "REPLACE_ME", model: "REPLACE_ME" }
+    backup:  { provider: "REPLACE_ME", model: "REPLACE_ME" }
+
+  reviewer:
+    primary: { provider: "REPLACE_ME", model: "REPLACE_ME" }
+    backup:  { provider: "REPLACE_ME", model: "REPLACE_ME" }
+
+  tester:
+    primary: { provider: "REPLACE_ME", model: "REPLACE_ME" }
+    backup:  { provider: "REPLACE_ME", model: "REPLACE_ME" }
+
+  architect:
+    primary: { provider: "REPLACE_ME", model: "REPLACE_ME" }
+    backup:  { provider: "REPLACE_ME", model: "REPLACE_ME" }
+
+  security:
+    primary: { provider: "REPLACE_ME", model: "REPLACE_ME" }
+    backup:  { provider: "REPLACE_ME", model: "REPLACE_ME" }
+
+  design_advisor:
+    primary: { provider: "REPLACE_ME", model: "REPLACE_ME" }
+    backup:  { provider: "REPLACE_ME", model: "REPLACE_ME" }
+
+  designer:
+    primary: { provider: "REPLACE_ME", model: "REPLACE_ME" }
+    backup:  { provider: "REPLACE_ME", model: "REPLACE_ME" }

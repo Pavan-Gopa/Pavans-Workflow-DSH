@@ -1,0 +1,14 @@
+{
+  "name": "pavans-workflow-dsh",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Pavan's human-supervised multi-model workflow port for DeepSeek Harness",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "doctor": "node scripts/doctor.mjs",
+    "init": "node scripts/init-state.mjs",
+    "test": "node scripts/selftest.mjs && node scripts/doctor.mjs --repo-only"
+  },
+  "license": "MIT"
+}
