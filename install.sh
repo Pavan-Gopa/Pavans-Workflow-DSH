@@ -4,15 +4,20 @@ set -Eeuo pipefail
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TARGET="$PWD"
 PROFILE="web"
+PRESET="blank"
 SKIP_PLUGINS=0
 SKIP_QUOTA=0
 
 usage() {
   cat <<'EOF'
-Usage: ./install.sh [--target PATH] [--profile NAME] [--skip-plugins] [--skip-quota]
+Usage: ./install.sh [--target PATH] [--profile NAME] [--preset blank|recommended] [--skip-plugins] [--skip-quota]
 
 Installs Pavan's Workflow DSH overlay into a product Git repository and installs
 recommended DeepSeek Harness plugins. Existing workflow trees are never overwritten.
+
+Presets:
+  blank        Create roles.yaml from roles.example.yaml with REPLACE_ME values (default).
+  recommended Create roles.yaml from the three-provider DeepSeek/Anthropic/OpenAI preset.
 EOF
 }
 
@@ -20,12 +25,18 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --target) TARGET="${2:?--target requires a path}"; shift 2 ;;
     --profile) PROFILE="${2:?--profile requires a name}"; shift 2 ;;
+    --preset) PRESET="${2:?--preset requires blank or recommended}"; shift 2 ;;
     --skip-plugins) SKIP_PLUGINS=1; shift ;;
     --skip-quota) SKIP_QUOTA=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+case "$PRESET" in
+  blank|recommended) ;;
+  *) echo "ERROR: --preset must be blank or recommended" >&2; exit 2 ;;
+esac
 
 command -v node >/dev/null || { echo "ERROR: Node.js 22+ is required" >&2; exit 1; }
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
@@ -43,6 +54,7 @@ if [[ "$TARGET" != "$SOURCE_DIR" ]]; then
   [[ -d "$TARGET/.git" ]] || { echo "ERROR: target must be a Git repository: $TARGET" >&2; exit 1; }
   for rel in \
     ".dsh/roles.example.yaml" \
+    ".dsh/roles.recommended.yaml" \
     ".dsh/skills/pavan-workflow" \
     ".dsh/skills/ponytail" \
     ".dsh/skills/grilling" \
@@ -57,6 +69,7 @@ if [[ "$TARGET" != "$SOURCE_DIR" ]]; then
 
   mkdir -p "$TARGET/.dsh/skills"
   cp "$SOURCE_DIR/.dsh/roles.example.yaml" "$TARGET/.dsh/roles.example.yaml"
+  cp "$SOURCE_DIR/.dsh/roles.recommended.yaml" "$TARGET/.dsh/roles.recommended.yaml"
   cp -R "$SOURCE_DIR/.dsh/skills/pavan-workflow" "$TARGET/.dsh/skills/"
   cp -R "$SOURCE_DIR/.dsh/skills/ponytail" "$TARGET/.dsh/skills/"
   cp -R "$SOURCE_DIR/.dsh/skills/grilling" "$TARGET/.dsh/skills/"
@@ -68,8 +81,14 @@ else
 fi
 
 if [[ ! -e "$TARGET/.dsh/roles.yaml" ]]; then
-  cp "$TARGET/.dsh/roles.example.yaml" "$TARGET/.dsh/roles.yaml"
-  echo "Created $TARGET/.dsh/roles.yaml (edit every REPLACE_ME before use)."
+  if [[ "$PRESET" == "recommended" ]]; then
+    cp "$TARGET/.dsh/roles.recommended.yaml" "$TARGET/.dsh/roles.yaml"
+    echo "Created $TARGET/.dsh/roles.yaml from the recommended three-provider preset."
+    echo "Required providers: DeepSeek, Anthropic, OpenAI. Configure their credentials in DSH Web."
+  else
+    cp "$TARGET/.dsh/roles.example.yaml" "$TARGET/.dsh/roles.yaml"
+    echo "Created $TARGET/.dsh/roles.yaml (edit every REPLACE_ME before use)."
+  fi
 else
   echo "Keeping existing $TARGET/.dsh/roles.yaml"
 fi
