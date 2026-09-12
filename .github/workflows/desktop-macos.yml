@@ -21,6 +21,7 @@ permissions:
 
 env:
   DSH_UPSTREAM_REF: c291e7961a515f6d7af9304e7fd1d257929aef26
+  DSH_RUNTIME_PNPM_VERSION: 10.27.0
 
 jobs:
   build:
@@ -138,7 +139,7 @@ jobs:
           codesign -dv --verbose=2 "$APP" 2>&1 | grep -q 'Signature=adhoc'
 
           (cd "$WORKSPACE" && env -u NODE_PATH "$NODE" "$DSH" --version)
-          test "$(cd "$WORKSPACE" && env -u NODE_PATH "$NODE" "$PNPM" --version)" = "11.7.0"
+          test "$(cd "$WORKSPACE" && env -u NODE_PATH "$NODE" "$PNPM" --version)" = "$DSH_RUNTIME_PNPM_VERSION"
 
           LOG="$TMP/harness.log"
           (cd "$WORKSPACE" && env -u NODE_PATH DSH_HOME="$TMP/home" DSH_TELEMETRY_DISABLED=1 "$NODE" "$DSH" web --port 0 --no-open >"$LOG" 2>&1) &
