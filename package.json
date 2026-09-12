@@ -9,13 +9,14 @@
   "scripts": {
     "doctor": "node scripts/doctor.mjs",
     "init": "node scripts/init-state.mjs",
-    "test": "node scripts/selftest.mjs && node scripts/doctor.mjs --repo-only && node --test desktop/workflow.test.cjs",
+    "test": "node scripts/selftest.mjs && node scripts/doctor.mjs --repo-only && node --test desktop/workflow.test.cjs desktop/toolchain.test.cjs",
     "desktop": "electron .",
-    "desktop:check": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/workflow.cjs",
+    "desktop:check": "node --check desktop/main.cjs && node --check desktop/preload.cjs && node --check desktop/workflow.cjs && node --check desktop/toolchain.cjs",
     "desktop:dist:mac": "electron-builder --mac dmg zip --publish never"
   },
   "dependencies": {
-    "@deepseek-ai/dsh": "0.1.5-rc.2"
+    "@deepseek-ai/dsh": "0.1.5-rc.2",
+    "pnpm": "11.7.0"
   },
   "devDependencies": {
     "electron": "44.0.0",

@@ -56,10 +56,13 @@ jobs:
           APP="$(find dist -type d -name 'Pavan Workflow.app' -print -quit)"
           test -n "$APP"
           DSH="$APP/Contents/Resources/app/node_modules/@deepseek-ai/dsh/lib/bin.js"
+          PNPM="$APP/Contents/Resources/app/node_modules/pnpm/bin/pnpm.cjs"
           EXE="$APP/Contents/MacOS/Pavan Workflow"
           test -f "$DSH"
+          test -f "$PNPM"
           test -f "$APP/Contents/Resources/app/.dsh/skills/pavan-workflow/SKILL.md"
           ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" --version
+          test "$(ELECTRON_RUN_AS_NODE=1 "$EXE" "$PNPM" --version)" = "11.7.0"
 
           TMP="$(mktemp -d)"
           LOG="$TMP/harness.log"

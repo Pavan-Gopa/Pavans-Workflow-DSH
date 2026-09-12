@@ -3,12 +3,14 @@ const { spawn, spawnSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
 const { installWorkflow } = require('./workflow.cjs')
+const { prepareBundledToolchain } = require('./toolchain.cjs')
 
 let window
 let harness
 let harnessOrigin
 let quitting = false
 let cachedRuntimePath
+let cachedToolchainBin
 
 const READY = /(?:^|\n)dsh web:\s+(http:\/\/127\.0\.0\.1:\d+(?:\/[^\s]*)?)(?:\s|$)/
 
@@ -37,10 +39,26 @@ function dshEntry() {
   return entry
 }
 
+function pnpmEntry() {
+  const entry = path.join(app.getAppPath(), 'node_modules', 'pnpm', 'bin', 'pnpm.cjs')
+  if (!fs.existsSync(entry)) throw new Error(`Bundled pnpm entrypoint is missing: ${entry}`)
+  return entry
+}
+
+function toolchainBin() {
+  if (cachedToolchainBin) return cachedToolchainBin
+  cachedToolchainBin = prepareBundledToolchain({
+    directory: path.join(app.getPath('userData'), 'toolchain'),
+    execPath: process.execPath,
+    pnpmEntry: pnpmEntry(),
+  }).binDir
+  return cachedToolchainBin
+}
+
 function runtimePath() {
   if (cachedRuntimePath) return cachedRuntimePath
 
-  const pathValues = []
+  const pathValues = [toolchainBin()]
   if (process.platform === 'darwin') {
     const preferredShell = process.env.SHELL && fs.existsSync(process.env.SHELL) ? process.env.SHELL : '/bin/zsh'
     try {

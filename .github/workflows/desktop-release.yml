@@ -55,10 +55,13 @@ jobs:
           APP="$(find dist -type d -name 'Pavan Workflow.app' -print -quit)"
           test -n "$APP"
           DSH="$APP/Contents/Resources/app/node_modules/@deepseek-ai/dsh/lib/bin.js"
+          PNPM="$APP/Contents/Resources/app/node_modules/pnpm/bin/pnpm.cjs"
           EXE="$APP/Contents/MacOS/Pavan Workflow"
           test -f "$DSH"
+          test -f "$PNPM"
           test -f "$APP/Contents/Resources/app/.dsh/skills/pavan-workflow/SKILL.md"
           ELECTRON_RUN_AS_NODE=1 "$EXE" "$DSH" --version
+          test "$(ELECTRON_RUN_AS_NODE=1 "$EXE" "$PNPM" --version)" = "11.7.0"
 
           TMP="$(mktemp -d)"
           LOG="$TMP/harness.log"
@@ -119,5 +122,5 @@ jobs:
             --target "$TARGET_SHA" \
             --title "Pavan Workflow Desktop ${VERSION}" \
             --prerelease \
-            --notes "macOS desktop alpha. Download the DMG for Apple Silicon (arm64) or Intel (x64). This alpha is unsigned, so macOS may require Open Anyway in System Settings -> Privacy & Security. DeepSeek Harness is bundled; Node.js and CLI setup are not required for normal launch."
+            --notes "macOS desktop alpha. Download the DMG for Apple Silicon (arm64) or Intel (x64). This alpha is unsigned, so macOS may require Open Anyway in System Settings -> Privacy & Security. DeepSeek Harness and pnpm are bundled; Node.js and CLI setup are not required for normal launch."
           gh release upload "$TAG" release-assets/*
